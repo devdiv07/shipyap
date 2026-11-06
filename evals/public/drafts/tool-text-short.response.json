@@ -1,0 +1,48 @@
+{
+  "response_version": "1",
+  "brief_sha256": "150fa6a274d45b7cf025f4c1e250d9a48b0c9ce6c79e9f6f38259fc2d777f771",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 3,
+          "line_end": 3,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S04",
+      "text": "I learned that the journal proves the action completed.",
+      "basis": "AUTHOR",
+      "source_refs": [],
+      "author_refs": [
+        "insight"
+      ],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S06",
+      "text": "The story backlog says semantic support has not been verified.",
+      "basis": "AUTHOR",
+      "source_refs": [],
+      "author_refs": [
+        "limitations.1"
+      ],
+      "paragraph_break_before": false
+    }
+  ],
+  "verification_needed": []
+}

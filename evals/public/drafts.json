@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "name": "valid-control",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/valid-control.response.json",
+      "control": true
+    },
+    {
+      "name": "missing-number",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/missing-number.response.json"
+    },
+    {
+      "name": "narrow-quote",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/narrow-quote.response.json"
+    },
+    {
+      "name": "overlong-reference",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/overlong-reference.response.json",
+      "control": true
+    },
+    {
+      "name": "outdated-option",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/outdated-option.response.json"
+    },
+    {
+      "name": "outdated-status",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/outdated-status.response.json"
+    },
+    {
+      "name": "author-angle",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/author-angle.response.json"
+    },
+    {
+      "name": "tool-text-short",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/tool-text-short.response.json"
+    },
+    {
+      "name": "warning-control",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/warning-control.response.json",
+      "control": true,
+      "fact_check": "drafts/warning-control.fact-check.json"
+    },
+    {
+      "name": "contradicted",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/contradicted.response.json",
+      "fact_check": "drafts/contradicted.fact-check.json"
+    },
+    {
+      "name": "known-hash",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/known-hash.response.json",
+      "control": true
+    },
+    {
+      "name": "hash-aside",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/hash-aside.response.json"
+    },
+    {
+      "name": "missing-scope",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/missing-scope.response.json"
+    },
+    {
+      "name": "fixture-repair",
+      "brief": "drafts/retry.brief.json",
+      "response": "drafts/fixture-repair.response.json",
+      "fact_check": "drafts/fixture-repair.fact-check.json",
+      "repair_fixture": "drafts/fixture-repair.repair-fixture.json"
+    }
+  ]
+}

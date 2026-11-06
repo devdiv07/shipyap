@@ -1,0 +1,33 @@
+# Prefer: uv run --locked --no-dev pros init --workspace <path> --repo <owner/name>
+# It creates stores and a commented config; repository modes use `pros repo set` afterwards.
+# All artifact paths resolve beneath workspace_root. No secrets belong in this file.
+workspace_root = '/absolute/path/to/your/workspace'
+workspace_id = 'your_workspace'
+preferences = 'repository-preferences.sqlite'
+backlog = 'story-backlog.sqlite'
+drafts = 'drafts'
+snapshots = 'snapshots'
+state = 'automation'
+model = 'claude-sonnet-5-5'
+max_cost_usd = '1.00'
+max_new_drafts = 1
+
+# Publishing defaults for `pros review` (the approval form is pre-filled with these).
+# buffer_channel_id = '0123456789abcdef01234567'   # your Buffer LinkedIn channel (24 hex)
+# x_channel_id = '0123456789abcdef01234568'        # optional Buffer X channel; X follows LinkedIn
+# posting_slots = ['Mon 09:30', 'Wed 09:30', 'Fri 09:30']  # your clock; also caps posts per week
+# utc_offset = '+00:00'  # init captures your current machine offset; override with --utc-offset.
+# This is a fixed offset: edit it when your clock/DST changes.
+# weekly_draft_cap = 4                              # paid drafts per week, across repositories
+
+# Optional: your own words about each repository, so drafts can say "I" for exactly these
+# statements (and nothing else). Without an entry, drafts for that repository stay third person.
+# [author]
+# name = "Your Name"
+# [[author.repos]]
+# repo = "owner/repo"
+# relationship = "primary_author"      # or "contributor"
+# statements = ["I built this repository to test ..."]   # 1 to 6, true, in your words
+# learned = []                         # optional: what you learned, in your words
+# do_not_claim = []                    # optional: things a post must never say
+# hashtags = []                        # optional, up to 3, e.g. "#AIAgents"

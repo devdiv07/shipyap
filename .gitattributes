@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Eval fixtures are hash-pinned snapshots and stored replies: keep their bytes exact.
+evals/** -text

@@ -1,0 +1,88 @@
+{
+  "brief_sha256": "150fa6a274d45b7cf025f4c1e250d9a48b0c9ce6c79e9f6f38259fc2d777f771",
+  "generator": {
+    "kind": "human",
+    "label": "SYNTHETIC hand-authored demo example"
+  },
+  "no_post_reason": null,
+  "outcome": "DRAFT",
+  "response_version": "1",
+  "segments": [
+    {
+      "author_refs": [],
+      "basis": "SOURCE",
+      "id": "S01",
+      "paragraph_break_before": false,
+      "source_refs": [
+        {
+          "line_end": 3,
+          "line_start": 3,
+          "path": "README.md",
+          "quote": null
+        }
+      ],
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete."
+    },
+    {
+      "author_refs": [],
+      "basis": "SOURCE",
+      "id": "S02",
+      "paragraph_break_before": false,
+      "source_refs": [
+        {
+          "line_end": 5,
+          "line_start": 5,
+          "path": "README.md",
+          "quote": null
+        }
+      ],
+      "text": "Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker."
+    },
+    {
+      "author_refs": [],
+      "basis": "SOURCE",
+      "id": "S03",
+      "paragraph_break_before": true,
+      "source_refs": [
+        {
+          "line_end": 7,
+          "line_start": 7,
+          "path": "README.md",
+          "quote": null
+        }
+      ],
+      "text": "A worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response."
+    },
+    {
+      "author_refs": [],
+      "basis": "SOURCE",
+      "id": "S04",
+      "paragraph_break_before": false,
+      "source_refs": [
+        {
+          "line_end": 9,
+          "line_start": 9,
+          "path": "README.md",
+          "quote": null
+        }
+      ],
+      "text": "The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly."
+    },
+    {
+      "author_refs": [],
+      "basis": "SOURCE",
+      "id": "S05",
+      "paragraph_break_before": true,
+      "source_refs": [
+        {
+          "line_end": 11,
+          "line_start": 11,
+          "path": "README.md",
+          "quote": null
+        }
+      ],
+      "text": "Scope: this is synthetic evidence only and does not measure production reliability."
+    }
+  ],
+  "verification_needed": []
+}

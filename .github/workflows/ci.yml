@@ -1,0 +1,51 @@
+name: Public offline checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          version: '0.10.5'
+          enable-cache: false
+      - run: uv sync --locked --extra dev
+      - run: uv run --no-sync python scripts/check_workspace.py
+      - name: Browser wrapper checks
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/check_browser_wrappers.ps1
+      - name: Python tests
+        shell: bash
+        env:
+          PYTEST_ADDOPTS: ""
+        run: |
+          rm -f "$RUNNER_TEMP/pytest-junit.xml"
+          uv run --no-sync python -m pytest -q -rs -p no:cacheprovider --junitxml="$RUNNER_TEMP/pytest-junit.xml" tests
+      - name: Verify the public test inventory
+        shell: bash
+        run: uv run --no-sync python scripts/check_expected_skips.py "$RUNNER_TEMP/pytest-junit.xml"
+      - run: uv run --no-sync pros eval --cases evals --profile public --check
+      - name: Installed offline demo
+        shell: bash
+        run: |
+          uv build --out-dir "$RUNNER_TEMP/pros-demo-dist"
+          uv pip install --no-deps --target "$RUNNER_TEMP/pros-demo-installed" "$RUNNER_TEMP"/pros-demo-dist/*.whl
+          uv run --no-sync python -B scripts/check_demo_install.py "$RUNNER_TEMP/pros-demo-installed"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .

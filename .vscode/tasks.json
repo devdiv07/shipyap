@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PROS: Workspace check",
+      "type": "shell",
+      "command": "python scripts/check_workspace.py",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "PROS: Tests",
+      "type": "shell",
+      "command": "uv run pytest -q",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "PROS: Lint and format check",
+      "type": "shell",
+      "command": "uv run ruff check . && uv run ruff format --check .",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

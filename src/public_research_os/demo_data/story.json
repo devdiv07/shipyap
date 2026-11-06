@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "angle": "A worker writes an intent before contacting the toy service.",
+      "source_refs": [
+        {
+          "line_end": 7,
+          "line_start": 7,
+          "path": "README.md"
+        }
+      ],
+      "story_key": "journaled-retries-sample",
+      "support": "The toy record describes how the worker preserves an unresolved attempt."
+    }
+  ],
+  "findings_version": "1",
+  "snapshot_manifest_sha256": "5643a841c7b739cc0d98606c5a8fb86b395db8ffb437bd526a2a596f61f40ee8",
+  "workspace_id": "synthetic_workspace"
+}

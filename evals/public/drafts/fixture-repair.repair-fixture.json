@@ -1,0 +1,18 @@
+{
+  "fixture": "SYNTHETIC",
+  "about": "Handwritten narrowing and re-check; never a live model result.",
+  "replies": [
+    {
+      "stop_reason": "end_turn",
+      "texts": [
+        "{\"rewrites\": [{\"segment_id\": \"S02\", \"text\": \"Retries are capped at 2 per job in this exercise.\"}]}"
+      ]
+    },
+    {
+      "stop_reason": "end_turn",
+      "texts": [
+        "{\"verdicts\": [{\"segment_id\": \"S02\", \"verdict\": \"SUPPORTED\", \"reason\": \"SYNTHETIC planted judgment.\", \"refs\": [\"README.md:5-5\"]}]}"
+      ]
+    }
+  ]
+}

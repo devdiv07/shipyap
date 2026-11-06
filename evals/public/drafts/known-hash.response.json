@@ -1,0 +1,88 @@
+{
+  "response_version": "1",
+  "brief_sha256": "150fa6a274d45b7cf025f4c1e250d9a48b0c9ce6c79e9f6f38259fc2d777f771",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Adapter label: 1234abcd.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 3,
+          "line_end": 3,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 5,
+          "line_end": 5,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S03",
+      "text": "A worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 7,
+          "line_end": 7,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": true
+    },
+    {
+      "id": "S04",
+      "text": "The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 9,
+          "line_end": 9,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S05",
+      "text": "Scope: this is synthetic evidence only and does not measure production reliability.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "README.md",
+          "line_start": 11,
+          "line_end": 11,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": true
+    }
+  ],
+  "verification_needed": []
+}

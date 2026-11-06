@@ -1,0 +1,23 @@
+# local environments and credentials
+.venv/
+.env
+.env.*
+!.env.drafter.example
+!.env.publisher.example
+.secrets/
+*.pem
+*.key
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.vscode/*.code-workspace
+.claude/settings.local.json
+CLAUDE.local.md
+artifacts/*
+!artifacts/.gitkeep

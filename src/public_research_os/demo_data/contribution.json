@@ -1,0 +1,29 @@
+{
+  "attempted": [
+    "I built a fictional queue to explain journaled retries."
+  ],
+  "audience": "Readers of synthetic examples",
+  "author_name": "Sample Author",
+  "channel": "linkedin",
+  "contribution_version": "1",
+  "do_not_claim": [
+    "Real-world reliability or adoption."
+  ],
+  "focus_paths": [],
+  "hashtags": [],
+  "insight": "Unverified backlog angle: the toy journal separates an attempt from a response.",
+  "learned": [
+    "No lesson learned by an author is recorded for this story."
+  ],
+  "limitations": [
+    "The angle and support come from the story backlog. Who proposed them is not recorded, and their semantic support is UNKNOWN: a deterministic check only located their citations in the pinned snapshot.",
+    "Cited evidence at revision cccccccccccccccccccccccccccccccccccccccc: README.md:3-9.",
+    "Only the author's own items (attempted, learned) are personal statements. The angle, its support and every result must come from the cited source lines."
+  ],
+  "relationship": "primary_author",
+  "voice_notes": null,
+  "why_it_matters": [
+    "Unverified backlog support: a missing response leaves an unresolved attempt."
+  ],
+  "workspace_id": "synthetic_workspace"
+}

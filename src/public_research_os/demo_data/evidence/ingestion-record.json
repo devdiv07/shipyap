@@ -1,0 +1,39 @@
+{
+  "api_version": "2022-11-28",
+  "files": [
+    {
+      "git_blob_sha1": "4020459a89ddd30f38f9a99a8356060331698890",
+      "git_mode": "100644",
+      "path": "README.md",
+      "sha256": "9b4e50f60b30eff4c684ddc28c6f7c9500c69ad5e3d06da647176c4046f5cf7b",
+      "size": 1654
+    },
+    {
+      "git_blob_sha1": "d94258d8b7270aee8efa1aa4f7a0b0192f1cc8df",
+      "git_mode": "100644",
+      "path": "docs/EXPERIMENT_PROTOCOL.md",
+      "sha256": "d3efb8f67209ba81b33ff71a592bd9fe4a4d5fbf46b1407443776ce034e9046e",
+      "size": 118
+    },
+    {
+      "git_blob_sha1": "2fedebaa22b1530598af76175452772958656d28",
+      "git_mode": "100644",
+      "path": "evidence/PROTOCOL_DEVIATION_001.md",
+      "sha256": "5ae6f9d39b6b9e95ae8d88d955489abd8c774dae13b5e8957ec75e80f4e30dab",
+      "size": 87
+    }
+  ],
+  "manifest_sha256": "5643a841c7b739cc0d98606c5a8fb86b395db8ffb437bd526a2a596f61f40ee8",
+  "notices": [
+    "COMPLETE means the files listed here were written and re-verified against this record. It is not an authenticated attestation: anyone who can write this directory can forge it.",
+    "File bytes were hashed independently. Tree listings are provider-supplied metadata; complete tree membership is not independently proven.",
+    "This is not scientific verification, claim approval or publication readiness."
+  ],
+  "record_version": "1",
+  "retrieval_mode": "github-rest-git-data",
+  "revision_sha": "cccccccccccccccccccccccccccccccccccccccc",
+  "source_url": "https://github.com/sample-owner/retry-lab",
+  "status": "COMPLETE",
+  "tree_sha": "dddddddddddddddddddddddddddddddddddddddd",
+  "workspace_id": "synthetic_workspace"
+}

@@ -1,0 +1,122 @@
+{
+  "stories": {
+    "normalisation": {
+      "min_accepted": 3
+    },
+    "invalid-core": {
+      "min_accepted": 0
+    }
+  },
+  "drafts": {
+    "valid-control": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true
+    },
+    "missing-number": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S01": "NUMBER_NOT_IN_EVIDENCE"
+      }
+    },
+    "narrow-quote": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S01": "NUMBER_NOT_IN_EVIDENCE"
+      }
+    },
+    "overlong-reference": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true
+    },
+    "outdated-option": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "outdated": {
+        "S01": "evidence/PROTOCOL_DEVIATION_001.md"
+      }
+    },
+    "outdated-status": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "outdated": {
+        "S01": "evidence/PROTOCOL_DEVIATION_001.md"
+      }
+    },
+    "author-angle": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S04": "AUTHOR_NOT_STATEMENT"
+      }
+    },
+    "tool-text-short": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S06": "TOOL_PHRASE"
+      },
+      "repair": {
+        "status": "SHELVED",
+        "approvable": false,
+        "dropped": [
+          "S06"
+        ]
+      }
+    },
+    "warning-control": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true
+    },
+    "contradicted": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S02": "FACT_CHECK_CONTRADICTED"
+      }
+    },
+    "known-hash": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true
+    },
+    "hash-aside": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S01": "NUMBER_NOT_IN_EVIDENCE"
+      },
+      "repair": {
+        "status": "CLEAN",
+        "approvable": true
+      }
+    },
+    "missing-scope": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true,
+      "repair": {
+        "status": "CLEAN",
+        "approvable": true,
+        "cites": [
+          "README.md:11-11"
+        ]
+      }
+    },
+    "fixture-repair": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true,
+      "repair": {
+        "status": "CLEAN",
+        "approvable": true,
+        "max_model_rounds": 1,
+        "texts": {
+          "S02": "Retries are capped at 2 per job in this exercise."
+        }
+      }
+    }
+  },
+  "max_false_alarms": 0,
+  "repair_totals": {
+    "min_clean": 3
+  }
+}

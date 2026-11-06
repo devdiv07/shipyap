@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "9b4e50f60b30eff4c684ddc28c6f7c9500c69ad5e3d06da647176c4046f5cf7b"
+    },
+    {
+      "path": "docs/EXPERIMENT_PROTOCOL.md",
+      "sha256": "d3efb8f67209ba81b33ff71a592bd9fe4a4d5fbf46b1407443776ce034e9046e"
+    },
+    {
+      "path": "evidence/PROTOCOL_DEVIATION_001.md",
+      "sha256": "5ae6f9d39b6b9e95ae8d88d955489abd8c774dae13b5e8957ec75e80f4e30dab"
+    }
+  ],
+  "manifest_version": "1",
+  "revision_sha": "cccccccccccccccccccccccccccccccccccccccc",
+  "source_url": "https://github.com/sample-owner/retry-lab",
+  "workspace_id": "synthetic_workspace"
+}

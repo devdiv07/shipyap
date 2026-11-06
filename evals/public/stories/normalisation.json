@@ -1,0 +1,25 @@
+{
+  "case_version": "1",
+  "source": "SYNTHETIC hand-authored fixture",
+  "repo": "sample-owner/retry-lab",
+  "revision": "cccccccccccccccccccccccccccccccccccccccc",
+  "mode": "focus",
+  "snapshot": "retry-lab",
+  "supplied": {
+    "README.md": 25,
+    "docs/EXPERIMENT_PROTOCOL.md": 4,
+    "evidence/PROTOCOL_DEVIATION_001.md": 3
+  },
+  "reply": {
+    "model": "claude-sonnet-5-5",
+    "request_id": null,
+    "stop_reason": "end_turn",
+    "texts": [
+      "{\"findings\": [{\"story_key\": \"long-reference\", \"angle\": \"A worker writes an intent before contacting the toy service.\", \"support\": \"The toy record describes how the worker preserves an unresolved attempt.\", \"source_refs\": [{\"path\": \"README.md\", \"line_start\": 1, \"line_end\": 24, \"quote\": \"A worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response.\"}]}, {\"story_key\": \"split-reference\", \"angle\": \"A worker writes an intent before contacting the toy service.\", \"support\": \"The toy record describes how the worker preserves an unresolved attempt.\", \"source_refs\": [{\"path\": \"README.md\", \"line_start\": 1, \"line_end\": 24, \"quote\": null}]}, {\"story_key\": \"missing-path\", \"angle\": \"A worker writes an intent before contacting the toy service.\", \"support\": \"The toy record describes how the worker preserves an unresolved attempt.\", \"source_refs\": [{\"path\": \"README.md\", \"line_start\": 7, \"line_end\": 7, \"quote\": \"A worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response.\"}, {\"path\": \"ABSENT.md\", \"line_start\": 1, \"line_end\": 1, \"quote\": null}]}]}"
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

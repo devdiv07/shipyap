@@ -1,0 +1,13 @@
+{
+  "draft": "contradicted",
+  "verdicts": [
+    {
+      "segment_id": "S02",
+      "verdict": "CONTRADICTED",
+      "reason": "SYNTHETIC planted judgment.",
+      "refs": [
+        "README.md:5-5"
+      ]
+    }
+  ]
+}
