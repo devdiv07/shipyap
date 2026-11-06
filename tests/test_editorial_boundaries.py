@@ -9,10 +9,10 @@ disk writes except through the shared, verified Assignment 02 writer.
 import ast
 from pathlib import Path
 
-from public_research_os.editorial.models import LINKEDIN
-from public_research_os.publication.models import Channel
+from shipyap.editorial.models import LINKEDIN
+from shipyap.publication.models import Channel
 
-EDITORIAL = Path(__file__).resolve().parents[1] / "src" / "public_research_os" / "editorial"
+EDITORIAL = Path(__file__).resolve().parents[1] / "src" / "shipyap" / "editorial"
 FORBIDDEN_BUILTINS = frozenset({"eval", "exec", "compile", "__import__", "open"})
 FORBIDDEN_ATTRIBUTES = frozenset(
     {"environ", "getenv", "putenv", "system", "popen", "import_module"}
@@ -43,10 +43,10 @@ def test_editorial_cannot_reach_the_publication_domain():
     for path in modules():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and node.module:
-                assert not node.module.startswith("public_research_os.publication"), path.name
+                assert not node.module.startswith("shipyap.publication"), path.name
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    assert not alias.name.startswith("public_research_os.publication"), path.name
+                    assert not alias.name.startswith("shipyap.publication"), path.name
 
 
 def test_the_only_channel_is_linkedin_and_matches_the_publication_contract():

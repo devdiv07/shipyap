@@ -9,18 +9,18 @@ import hashlib
 import json
 from pathlib import Path
 
-from public_research_os.editorial.brief import build_brief, render_brief_json
-from public_research_os.editorial.models import (
+from shipyap.editorial.brief import build_brief, render_brief_json
+from shipyap.editorial.models import (
     NOT_LEARNED,
     PROVENANCE,
     AuthorContribution,
 )
-from public_research_os.editorial.sources import load_verified_snapshot
-from public_research_os.evidence.report import canonical_json
-from public_research_os.ingestion.assemble import build_plan
-from public_research_os.ingestion.github import FetchedFile, FetchedSnapshot
-from public_research_os.ingestion.request import IngestionRequest
-from public_research_os.ingestion.writer import publish_snapshot
+from shipyap.editorial.sources import load_verified_snapshot
+from shipyap.evidence.report import canonical_json
+from shipyap.ingestion.assemble import build_plan
+from shipyap.ingestion.github import FetchedFile, FetchedSnapshot
+from shipyap.ingestion.request import IngestionRequest
+from shipyap.ingestion.writer import publish_snapshot
 
 ROOT = Path(__file__).resolve().parents[1] / "evals" / "public"
 MODEL = "claude-sonnet-5-5"

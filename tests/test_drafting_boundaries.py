@@ -9,7 +9,7 @@ path).
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 DRAFTING = SRC / "drafting"
 FORBIDDEN_BUILTINS = frozenset({"eval", "exec", "compile", "__import__", "open"})
 FORBIDDEN_ATTRIBUTES = frozenset(
@@ -39,7 +39,7 @@ def test_drafting_has_no_dynamic_code_publication_route_or_direct_disk_writes():
                 if isinstance(node.value, ast.Name) and node.value.id == "os":
                     assert node.attr not in FORBIDDEN_OS | {"getenv"}, (path.name, node.attr)
             if isinstance(node, ast.ImportFrom) and node.module:
-                assert not node.module.startswith("public_research_os.publication"), path.name
+                assert not node.module.startswith("shipyap.publication"), path.name
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    assert not alias.name.startswith("public_research_os.publication"), path.name
+                    assert not alias.name.startswith("shipyap.publication"), path.name

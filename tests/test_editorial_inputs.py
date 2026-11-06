@@ -14,13 +14,13 @@ from editorial_fake import (
     seg,
 )
 
-from public_research_os.editorial import sources
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.inputs import parse_contribution, parse_response
-from public_research_os.editorial.sources import load_verified_snapshot, split_lines
-from public_research_os.evidence.report import ErrorCode
-from public_research_os.evidence.validation import UnreadableInput
-from public_research_os.ingestion.assemble import SNAPSHOT_DIR
+from shipyap.editorial import sources
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.inputs import parse_contribution, parse_response
+from shipyap.editorial.sources import load_verified_snapshot, split_lines
+from shipyap.evidence.report import ErrorCode
+from shipyap.evidence.validation import UnreadableInput
+from shipyap.ingestion.assemble import SNAPSHOT_DIR
 
 E = EditorialErrorCode
 SHA = "c" * 64

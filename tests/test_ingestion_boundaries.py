@@ -5,7 +5,7 @@ Whole-tree network and process rules are in test_boundaries."""
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 INGESTION = SRC / "ingestion"
 FORBIDDEN_BUILTINS = frozenset({"eval", "exec", "compile", "__import__"})
 FORBIDDEN_ATTRIBUTES = frozenset(

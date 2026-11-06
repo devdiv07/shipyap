@@ -18,14 +18,14 @@ from editorial_fake import (
 )
 from pydantic import ValidationError
 
-from public_research_os.editorial.brief import build_brief
-from public_research_os.editorial.grounding import (
+from shipyap.editorial.brief import build_brief
+from shipyap.editorial.grounding import (
     check_draft,
     normalize,
     number_tokens,
     render_post,
 )
-from public_research_os.editorial.models import (
+from shipyap.editorial.models import (
     UNRECORDED_AUTHOR,
     AssertionMap,
     AuthorContribution,
@@ -36,7 +36,7 @@ from public_research_os.editorial.models import (
     RefCheck,
     Severity,
 )
-from public_research_os.editorial.sources import load_verified_snapshot
+from shipyap.editorial.sources import load_verified_snapshot
 
 C = FindingCode
 SHA = "d" * 64

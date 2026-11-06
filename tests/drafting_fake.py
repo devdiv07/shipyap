@@ -13,9 +13,9 @@ from pathlib import Path
 import httpx2
 from editorial_fake import CLEAN_SEGMENTS, SENTINEL, contribution, write_json
 
-from public_research_os.drafting.errors import DraftingError
-from public_research_os.drafting.models import ModelReply, ModelRequest, Usage
-from public_research_os.editorial.service import run_brief
+from shipyap.drafting.errors import DraftingError
+from shipyap.drafting.models import ModelReply, ModelRequest, Usage
+from shipyap.editorial.service import run_brief
 
 KEY = "sk-ant-api03-TESTKEY-never-print-0123456789"
 REQUEST_ID = "req_011TestRequestId0001"

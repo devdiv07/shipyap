@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from editorial_fake import ref, response, seg
 
-from public_research_os.drafting.normalise import normalise_response
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.inputs import parse_response
+from shipyap.drafting.normalise import normalise_response
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.inputs import parse_response
 
 SHA = "a" * 64
 LINES = tuple(f"line {n} of the record." for n in range(1, 41))

@@ -35,15 +35,15 @@ def main() -> int:
     installed = args.installed.resolve(strict=True)
     sys.path.insert(0, str(installed))
     sys.addaudithook(audit)
-    import public_research_os
-    from public_research_os.automation.cli import main as cli
-    from public_research_os.drafting import provider
-    from public_research_os.publication import buffer
-    from public_research_os.review.server import ReviewServer
+    import shipyap
+    from shipyap.automation.cli import main as cli
+    from shipyap.drafting import provider
+    from shipyap.publication import buffer
+    from shipyap.review.server import ReviewServer
 
-    assert Path(public_research_os.__file__).resolve().is_relative_to(installed)
-    resources = installed / "public_research_os/demo_data"
-    source = ROOT / "src/public_research_os/demo_data"
+    assert Path(shipyap.__file__).resolve().is_relative_to(installed)
+    resources = installed / "shipyap/demo_data"
+    source = ROOT / "src/shipyap/demo_data"
 
     def contents(directory):
         return {

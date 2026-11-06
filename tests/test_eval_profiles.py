@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 from public_fake import directory_link
 
-from public_research_os.automation import evaluation
-from public_research_os.automation.cli import main
-from public_research_os.automation.eval_profiles import public_cases
-from public_research_os.drafting.service import checked_input
-from public_research_os.editorial.inputs import parse_brief, parse_response
-from public_research_os.publication.x import x_weight
-from public_research_os.review.x_post import x_post
+from shipyap.automation import evaluation
+from shipyap.automation.cli import main
+from shipyap.automation.eval_profiles import public_cases
+from shipyap.drafting.service import checked_input
+from shipyap.editorial.inputs import parse_brief, parse_response
+from shipyap.publication.x import x_weight
+from shipyap.review.x_post import x_post
 
 EVALS = Path(__file__).resolve().parents[1] / "evals"
 PUBLIC = EVALS / "public"

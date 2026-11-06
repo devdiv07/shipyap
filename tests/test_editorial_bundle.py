@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from public_research_os.editorial.bundle import BundleIncomplete, publish_bundle, verify_bundle
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.models import RECORD_FILE, BundleKind, BundleRecord
+from shipyap.editorial.bundle import BundleIncomplete, publish_bundle, verify_bundle
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.models import RECORD_FILE, BundleKind, BundleRecord
 
 E = EditorialErrorCode
 FIELDS = {

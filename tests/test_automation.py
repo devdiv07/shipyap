@@ -16,24 +16,25 @@ from editorial_fake import seg
 from github_fake import FakeGithub, json_response, tree_id
 from stories_fake import HISTORIC_FILES, historic_finding, ref
 
-from public_research_os.automation import cli, engine, factcheck, repair, selection
-from public_research_os.automation.config import AutomationError, load_config
-from public_research_os.automation.selection import select_sources
-from public_research_os.automation.slots import describe_local, next_free_slot
-from public_research_os.automation.state import State, run_lock
-from public_research_os.drafting import service, story_draft, story_prompt, story_service
-from public_research_os.drafting.errors import DraftingError, DraftingErrorCode, Phase
-from public_research_os.drafting.policy import counted_estimate
-from public_research_os.drafting.prompt import STORY_SYSTEM_PROMPT, absolute_phrases
-from public_research_os.drafting.story_draft import ANGLE_LABEL, SUPPORT_LABEL
-from public_research_os.editorial.grounding import number_tokens
-from public_research_os.editorial.models import UNVERIFIED_PREFIX, DraftStatus
-from public_research_os.ingestion.transport import _API_PATH
-from public_research_os.preferences.repositories import RepositoryPreferences
-from public_research_os.review.pages import StoryView, queue_page, story_page
-from public_research_os.review.service import ReviewDesk, ReviewState
-from public_research_os.stories.backlog import StoryBacklog, StoryState
-from public_research_os.stories.errors import StoryError, StoryErrorCode
+from shipyap.automation import cli, engine, factcheck, repair, selection
+from shipyap.automation import review as review_page
+from shipyap.automation.config import AutomationError, load_config
+from shipyap.automation.selection import select_sources
+from shipyap.automation.slots import describe_local, next_free_slot
+from shipyap.automation.state import State, run_lock
+from shipyap.drafting import service, story_draft, story_prompt, story_service
+from shipyap.drafting.errors import DraftingError, DraftingErrorCode, Phase
+from shipyap.drafting.policy import counted_estimate
+from shipyap.drafting.prompt import STORY_SYSTEM_PROMPT, absolute_phrases
+from shipyap.drafting.story_draft import ANGLE_LABEL, SUPPORT_LABEL
+from shipyap.editorial.grounding import number_tokens
+from shipyap.editorial.models import UNVERIFIED_PREFIX, DraftStatus
+from shipyap.ingestion.transport import _API_PATH
+from shipyap.preferences.repositories import RepositoryPreferences
+from shipyap.review.pages import StoryView, queue_page, story_page
+from shipyap.review.service import ReviewDesk, ReviewState
+from shipyap.stories.backlog import StoryBacklog, StoryState
+from shipyap.stories.errors import StoryError, StoryErrorCode
 
 NOW = datetime(2026, 10, 29, tzinfo=UTC)
 REPO = "synthetic-owner/synthetic-repo"
@@ -588,9 +589,9 @@ def test_console_command_runs_full_controlled_pipeline_and_prints_review_locatio
 
 
 def test_a_fresh_workspace_runs_and_reviews_with_one_clear_message(tmp_path, monkeypatch, capsys):
-    from public_research_os.publication import buffer
-    from public_research_os.review.pages import STOP_MESSAGE
-    from public_research_os.review.server import ReviewServer
+    from shipyap.publication import buffer
+    from shipyap.review.pages import STOP_MESSAGE
+    from shipyap.review.server import ReviewServer
 
     def no_page(_server):
         raise KeyboardInterrupt  # the owner's Ctrl+C, at once
@@ -943,10 +944,39 @@ def test_a_run_writes_last_run_and_one_notification_per_event(work):
     result = execute(cfg, model=Model(), allow_paid=True)
     cli._tell(cfg, result, ["Posted A screenshot proves capture"])
     lines = (cfg.workspace_root / "notify.txt").read_text(encoding="utf-8").splitlines()
-    assert lines[0].startswith("LinkedIn draft ready|")
+    assert re.fullmatch(r"[0-9a-f]{64}", result.draft_story)
+    title, text, link = lines[0].split("|")
+    assert title == "Shipyap: 1 draft ready to review" and "Review" in text
+    assert link == f"shipyap://review/{result.draft_story}"
     assert lines[1] == "Shipyap|Posted A screenshot proves capture"
     last = (cfg.workspace_root / "last-run.txt").read_text(encoding="utf-8")
     assert "drafts created 1" in last
+
+
+def test_the_ready_toast_counts_every_draft_waiting_and_links_the_new_one(work, monkeypatch):
+    cfg, _ = work
+    result = execute(cfg, model=Model(), allow_paid=True)
+    others = ("a" * 64, "b" * 64)
+    monkeypatch.setattr(cli.review_page, "waiting", lambda config: (*others, result.draft_story))
+    cli._tell(cfg, result, [])
+    line = (cfg.workspace_root / "notify.txt").read_text(encoding="utf-8").splitlines()[0]
+    assert line.startswith("Shipyap: 3 drafts ready to review|")
+    assert line.endswith(f"|shipyap://review/{result.draft_story}")
+
+
+def test_no_ready_toast_or_link_without_a_draft_this_run(work, monkeypatch):
+    cfg, _ = work
+    monkeypatch.setattr(cli.review_page, "waiting", lambda config: ("a" * 64,))
+    cli._tell(cfg, engine.RunResult(), [])
+    assert "shipyap://" not in (cfg.workspace_root / "notify.txt").read_text(encoding="utf-8")
+
+
+def test_waiting_is_empty_when_the_workspace_cannot_be_read(work):
+    cfg, _ = work
+    result = execute(cfg, model=Model(), allow_paid=True)
+    assert review_page.waiting(cfg) == (result.draft_story,)  # what the page lists
+    broken = replace(cfg, drafts=cfg.workspace_root / "missing", snapshots=cfg.drafts)
+    assert review_page.waiting(broken) == ()
 
 
 # --- evidence selection: a plan is paired with the code and tests behind it -------------------

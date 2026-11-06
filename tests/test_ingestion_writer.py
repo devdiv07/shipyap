@@ -5,20 +5,20 @@ from pathlib import Path
 import pytest
 from github_fake import FakeGithub, request_bytes
 
-from public_research_os.evidence.manifest import SourceManifest
-from public_research_os.evidence.report import canonical_json
-from public_research_os.evidence.strict_json import loads_strict
-from public_research_os.ingestion.assemble import (
+from shipyap.evidence.manifest import SourceManifest
+from shipyap.evidence.report import canonical_json
+from shipyap.evidence.strict_json import loads_strict
+from shipyap.ingestion.assemble import (
     MANIFEST_NAME,
     RECORD_NAME,
     SNAPSHOT_DIR,
     SnapshotPlan,
     build_plan,
 )
-from public_research_os.ingestion.errors import IngestErrorCode, IngestionError
-from public_research_os.ingestion.github import GithubReader
-from public_research_os.ingestion.request import parse_request
-from public_research_os.ingestion.writer import (
+from shipyap.ingestion.errors import IngestErrorCode, IngestionError
+from shipyap.ingestion.github import GithubReader
+from shipyap.ingestion.request import parse_request
+from shipyap.ingestion.writer import (
     preflight_destination,
     publish_snapshot,
     verify_completion,

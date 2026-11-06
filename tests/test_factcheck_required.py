@@ -7,7 +7,7 @@ from test_review import CHANNEL, DUE, NOW, R, refused
 from test_review import serve as serve
 from test_review import work as work
 
-from public_research_os.review.pages import StoryView, queue_page, story_page
+from shipyap.review.pages import StoryView, queue_page, story_page
 
 
 @pytest.mark.parametrize(

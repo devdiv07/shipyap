@@ -24,11 +24,11 @@ from publication_fake import (
     timeout,
 )
 
-from public_research_os.publication.approval import confirmation_phrase
-from public_research_os.publication.buffer import BufferPublisher, TransportReply
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.ledger import IntentState, Ledger
-from public_research_os.publication.service import (
+from shipyap.publication.approval import confirmation_phrase
+from shipyap.publication.buffer import BufferPublisher, TransportReply
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.ledger import IntentState, Ledger
+from shipyap.publication.service import (
     INTERRUPTED_AFTER,
     approve,
     describe,

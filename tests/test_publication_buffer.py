@@ -23,15 +23,15 @@ from publication_fake import (
 )
 from pydantic import SecretStr
 
-from public_research_os.publication import buffer
-from public_research_os.publication.buffer import (
+from shipyap.publication import buffer
+from shipyap.publication.buffer import (
     BufferPublisher,
     HttpsBufferTransport,
     TransportFailure,
     TransportReply,
 )
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.port import CreateKind
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.port import CreateKind
 
 E = PublicationErrorCode
 K = CreateKind

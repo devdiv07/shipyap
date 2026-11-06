@@ -10,7 +10,7 @@ import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from public_research_os.ingestion.github import TransportResponse, git_blob_id
+from shipyap.ingestion.github import TransportResponse, git_blob_id
 
 REVISION = "0123456789abcdef0123456789abcdef01234567"
 OWNER = "synthetic-owner"

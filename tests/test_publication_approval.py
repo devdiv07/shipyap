@@ -14,8 +14,8 @@ from publication_fake import (
     make_bundle,
 )
 
-from public_research_os.editorial.models import DraftStatus
-from public_research_os.publication.approval import (
+from shipyap.editorial.models import DraftStatus
+from shipyap.publication.approval import (
     approval_id,
     approval_sheet,
     confirmation_phrase,
@@ -23,9 +23,9 @@ from public_research_os.publication.approval import (
     parse_due_at,
     provider_time,
 )
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.ledger import Ledger
-from public_research_os.publication.service import approve, load_candidate
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.ledger import Ledger
+from shipyap.publication.service import approve, load_candidate
 
 E = PublicationErrorCode
 

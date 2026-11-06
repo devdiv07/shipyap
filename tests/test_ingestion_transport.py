@@ -8,11 +8,11 @@ from contextlib import ExitStack, contextmanager, nullcontext
 import pytest
 from github_fake import OWNER, REPO, REVISION, request_bytes
 
-from public_research_os.ingestion import transport
-from public_research_os.ingestion.errors import IngestErrorCode, IngestionError
-from public_research_os.ingestion.github import DEFAULT_LIMITS, GithubReader, Limits
-from public_research_os.ingestion.request import parse_request
-from public_research_os.ingestion.transport import (
+from shipyap.ingestion import transport
+from shipyap.ingestion.errors import IngestErrorCode, IngestionError
+from shipyap.ingestion.github import DEFAULT_LIMITS, GithubReader, Limits
+from shipyap.ingestion.request import parse_request
+from shipyap.ingestion.transport import (
     API_HOST,
     API_PORT,
     API_VERSION,

@@ -13,16 +13,16 @@ from publication_fake import CHANNEL, DUE, NOW
 from stories_fake import HISTORIC_FILES, make_snapshot, ref
 from test_review import SEGMENTS, Work, approve_current, refused, texts
 
-from public_research_os.automation import evaluation
-from public_research_os.editorial.supersession import (
+from shipyap.automation import evaluation
+from shipyap.editorial.supersession import (
     CHANGED_ITEM,
     STATUS_LINE,
     Record,
     check_superseded,
 )
-from public_research_os.review.gate import Gate, Note, SegmentGate
-from public_research_os.review.pages import StoryView, story_page
-from public_research_os.review.service import ReviewDesk, ReviewErrorCode, reject_phrase
+from shipyap.review.gate import Gate, Note, SegmentGate
+from shipyap.review.pages import StoryView, story_page
+from shipyap.review.service import ReviewDesk, ReviewErrorCode, reject_phrase
 
 R = ReviewErrorCode
 PLAN_FILES = {
@@ -281,9 +281,9 @@ def _older_checker(monkeypatch):
     """Bundles built while this is active carry the map an older rule would write: one more
     blocking finding on the first segment, with the classification, question, counts and status
     that follow from it (consistent throughout, as a real older checker's map is)."""
-    from public_research_os.editorial import grounding
-    from public_research_os.editorial import service as editorial_service
-    from public_research_os.editorial.models import (
+    from shipyap.editorial import grounding
+    from shipyap.editorial import service as editorial_service
+    from shipyap.editorial.models import (
         Classification,
         DraftStatus,
         Finding,
@@ -332,7 +332,7 @@ def _older_checker(monkeypatch):
 def test_a_bundle_checked_under_older_rules_is_stale_rejectable_and_never_approvable(
     tmp_path, monkeypatch
 ):
-    from public_research_os.review.service import STALE_MESSAGE
+    from shipyap.review.service import STALE_MESSAGE
 
     with monkeypatch.context() as patched:
         _older_checker(patched)

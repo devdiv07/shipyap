@@ -88,7 +88,8 @@
       },
       "repair": {
         "status": "CLEAN",
-        "approvable": true
+        "approvable": true,
+        "fact_check": "REQUIRED"
       }
     },
     "missing-scope": {
@@ -99,7 +100,8 @@
         "approvable": true,
         "cites": [
           "README.md:11-11"
-        ]
+        ],
+        "fact_check": "REQUIRED"
       }
     },
     "fixture-repair": {
@@ -111,7 +113,8 @@
         "max_model_rounds": 1,
         "texts": {
           "S02": "Retries are capped at 2 per job in this exercise."
-        }
+        },
+        "fact_check": "REQUIRED"
       }
     }
   },

@@ -2,8 +2,8 @@
 
 import pytest
 
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.linkedin import (
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.linkedin import (
     LINKEDIN_MAX_UNITS,
     URL_UNITS,
     check_publishable_text,

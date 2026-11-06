@@ -8,7 +8,7 @@ publisher cannot reach drafting or ingestion, and has no dynamic code or process
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 PUBLICATION = SRC / "publication"
 
 
@@ -27,8 +27,8 @@ def test_the_publisher_and_the_drafter_cannot_reach_each_other():
             elif isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             for name in names:
-                assert not name.startswith("public_research_os.drafting"), path.name
-                assert not name.startswith("public_research_os.ingestion"), path.name
+                assert not name.startswith("shipyap.drafting"), path.name
+                assert not name.startswith("shipyap.ingestion"), path.name
                 assert "anthropic" not in name, path.name
 
 

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from public_research_os.evidence.models import Claim, require_approved_claim
+from shipyap.evidence.models import Claim, require_approved_claim
 
 
 def test_approved_claim_passes_mechanical_gate(approved_claim):

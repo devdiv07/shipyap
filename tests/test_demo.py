@@ -6,17 +6,17 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from test_review import Client
 
-from public_research_os.automation import demo as module
-from public_research_os.automation.cli import main
-from public_research_os.automation.demo import workspace
-from public_research_os.automation.review import serve as normal_review
-from public_research_os.drafting import provider
-from public_research_os.publication import buffer
-from public_research_os.publication.approval import confirmation_phrase
-from public_research_os.publication.ledger import Ledger
-from public_research_os.review.pages import ApprovalDefaults
-from public_research_os.review.server import ReviewServer
-from public_research_os.review.service import ReviewError, ReviewErrorCode, schedule_phrase
+from shipyap.automation import demo as module
+from shipyap.automation.cli import main
+from shipyap.automation.demo import workspace
+from shipyap.automation.review import serve as normal_review
+from shipyap.drafting import provider
+from shipyap.publication import buffer
+from shipyap.publication.approval import confirmation_phrase
+from shipyap.publication.ledger import Ledger
+from shipyap.review.pages import ApprovalDefaults
+from shipyap.review.server import ReviewServer
+from shipyap.review.service import ReviewError, ReviewErrorCode, schedule_phrase
 
 CHANNEL = "0123456789abcdef01234567"
 

@@ -8,17 +8,17 @@ from datetime import timedelta
 import pytest
 from publication_fake import CHANNEL, DUE, NOW, POST_TEXT
 
-from public_research_os.preferences import repositories as preferences_module
-from public_research_os.preferences.errors import PreferencesError, PreferencesErrorCode
-from public_research_os.preferences.repositories import (
+from shipyap.preferences import repositories as preferences_module
+from shipyap.preferences.errors import PreferencesError, PreferencesErrorCode
+from shipyap.preferences.repositories import (
     Mode,
     RepositoryPreferences,
     normalize_repository,
 )
-from public_research_os.publication import ledger as ledger_module
-from public_research_os.publication.approval import Candidate
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.ledger import IntentState, Ledger
+from shipyap.publication import ledger as ledger_module
+from shipyap.publication.approval import Candidate
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.ledger import IntentState, Ledger
 
 E = PreferencesErrorCode
 HISTORIC = "sample-owner/capture-lab"

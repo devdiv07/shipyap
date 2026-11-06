@@ -6,7 +6,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import HttpUrl
 
-from public_research_os.evidence.policy import (
+from shipyap.evidence.policy import (
     PathViolation,
     UrlViolation,
     check_relative_path,

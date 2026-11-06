@@ -3,7 +3,7 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from public_research_os.evidence.manifest import SourceManifest
+from shipyap.evidence.manifest import SourceManifest
 
 
 def test_valid_manifest(manifest_data):

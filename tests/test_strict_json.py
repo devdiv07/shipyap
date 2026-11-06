@@ -1,6 +1,6 @@
 import pytest
 
-from public_research_os.evidence.strict_json import JsonViolation, StrictJsonError, loads_strict
+from shipyap.evidence.strict_json import JsonViolation, StrictJsonError, loads_strict
 
 
 def violation(data: bytes) -> tuple[JsonViolation, str | None]:

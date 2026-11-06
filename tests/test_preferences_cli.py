@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from public_research_os.automation.cli import main
-from public_research_os.preferences.repositories import RepositoryPreferences
-from public_research_os.publication import buffer
+from shipyap.automation.cli import main
+from shipyap.preferences.repositories import RepositoryPreferences
+from shipyap.publication import buffer
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 PREFERENCES = SRC / "preferences"
 HISTORIC = "sample-owner/capture-lab"
 
@@ -125,9 +125,9 @@ def test_the_preferences_package_has_no_network_environment_model_or_publisher_i
         "requests",
     }
     forbidden_prefixes = (
-        "public_research_os.publication",
-        "public_research_os.drafting",
-        "public_research_os.editorial",
+        "shipyap.publication",
+        "shipyap.drafting",
+        "shipyap.editorial",
     )
     modules = sorted(PREFERENCES.glob("*.py"))
     assert len(modules) >= 3

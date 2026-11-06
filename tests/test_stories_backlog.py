@@ -16,20 +16,20 @@ from stories_fake import (
     sha256_file,
 )
 
-from public_research_os.editorial.sources import load_verified_snapshot
-from public_research_os.preferences.errors import PreferencesError
-from public_research_os.preferences.repositories import RepositoryPreferences
-from public_research_os.publication.errors import PublicationError
-from public_research_os.publication.ledger import Ledger
-from public_research_os.stories.backlog import (
+from shipyap.editorial.sources import load_verified_snapshot
+from shipyap.preferences.errors import PreferencesError
+from shipyap.preferences.repositories import RepositoryPreferences
+from shipyap.publication.errors import PublicationError
+from shipyap.publication.ledger import Ledger
+from shipyap.stories.backlog import (
     Observation,
     RecordOutcome,
     StoryBacklog,
     StoryState,
     story_id,
 )
-from public_research_os.stories.errors import StoryError, StoryErrorCode
-from public_research_os.stories.findings import (
+from shipyap.stories.errors import StoryError, StoryErrorCode
+from shipyap.stories.findings import (
     Refusal,
     StoryFinding,
     check_finding,

@@ -6,9 +6,9 @@ on the Step 4 draft as auto-repair leaves it (its scope line added for free).
 
 import pytest
 
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.x import X_MAX_WEIGHT, check_x_text, x_weight
-from public_research_os.review.x_post import sentence_ends
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.x import X_MAX_WEIGHT, check_x_text, x_weight
+from shipyap.review.x_post import sentence_ends
 
 
 def test_x_counts_wide_characters_and_emoji_twice_and_a_url_at_least_23():

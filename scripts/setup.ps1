@@ -7,6 +7,10 @@
   PROS_BUFFER_API_KEY). No key is ever written into the task. Without -EnablePaid the task
   makes no paid model request: it recovers saved work, records stories and checks posts.
 
+  It also registers a shipyap:// link handler for your Windows user only (HKCU\Software\Classes\
+  shipyap and HKCU\Software\Shipyap, which holds the config path), so the Review button on a
+  "draft ready" notification opens that draft. -Remove deletes the task and both keys.
+
 .EXAMPLE
   .\scripts\setup.ps1 -Config C:\work\my-posts\pros.toml -EnablePaid
   .\scripts\setup.ps1 -Remove
@@ -19,6 +23,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'review-link.ps1')
 $TaskName = 'Shipyap'
 $LegacyTaskName = 'Public Research OS'  # earlier name; removed so two timers never run
 
@@ -26,7 +31,8 @@ if ($Remove) {
     foreach ($Name in @($TaskName, $LegacyTaskName)) {
         Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
     }
-    Write-Host "Removed the '$TaskName' task. Nothing will run on its own any more."
+    Unregister-ShipyapProtocol
+    Write-Host "Removed the '$TaskName' task and the shipyap:// link handler. Nothing will run on its own any more."
     return
 }
 
@@ -53,8 +59,11 @@ $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" 
 Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings `
     -Principal $Principal -Force | Out-Null
+# Per-user (HKCU) shipyap:// handler: a notification's Review button opens that draft.
+Register-ShipyapProtocol -Config (Resolve-Path -LiteralPath $Config).Path -ScriptsDirectory $PSScriptRoot
 
 $Mode = if ($EnablePaid) { 'paid runs ON (capped by max_cost_usd per run and weekly_draft_cap)' } else { 'free runs only' }
 Write-Host "Scheduled '$TaskName': every $EveryHours hours while you are logged in, $Mode."
 Write-Host "First run in about 2 minutes. Results: last-run.txt in your workspace, plus a notification."
+Write-Host "A 'draft ready' notification has a Review button that opens that draft (shipyap:// link, this user only)."
 Write-Host "Pause everything: create a file named STOP in your workspace. Remove the task: .\scripts\setup.ps1 -Remove"

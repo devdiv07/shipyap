@@ -43,30 +43,30 @@ from stories_fake import (
 )
 from stories_fake import findings as findings_document
 
-from public_research_os.drafting import provider
-from public_research_os.drafting.policy import DEFAULT_MODEL
-from public_research_os.drafting.story_draft import plan_story_draft, run_story_draft
-from public_research_os.editorial.bundle import verify_bundle
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.models import BundleKind, DraftStatus, FindingCode, RefCheck
-from public_research_os.editorial.service import build_from_response, prepare_build
-from public_research_os.evidence.report import canonical_json
-from public_research_os.ingestion.assemble import SNAPSHOT_DIR
-from public_research_os.preferences.repositories import RepositoryPreferences
-from public_research_os.publication import buffer
-from public_research_os.publication import ledger as ledger_module
-from public_research_os.publication.approval import Candidate, confirmation_phrase
-from public_research_os.publication.buffer import (
+from shipyap.drafting import provider
+from shipyap.drafting.policy import DEFAULT_MODEL
+from shipyap.drafting.story_draft import plan_story_draft, run_story_draft
+from shipyap.editorial.bundle import verify_bundle
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.models import BundleKind, DraftStatus, FindingCode, RefCheck
+from shipyap.editorial.service import build_from_response, prepare_build
+from shipyap.evidence.report import canonical_json
+from shipyap.ingestion.assemble import SNAPSHOT_DIR
+from shipyap.preferences.repositories import RepositoryPreferences
+from shipyap.publication import buffer
+from shipyap.publication import ledger as ledger_module
+from shipyap.publication.approval import Candidate, confirmation_phrase
+from shipyap.publication.buffer import (
     BufferPublisher,
     TransportFailure,
     TransportReply,
 )
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.ledger import IntentState, Ledger, ReviewKind
-from public_research_os.publication.service import approve, load_candidate, reconcile, submit
-from public_research_os.review import server as server_module
-from public_research_os.review import service as review_service
-from public_research_os.review.pages import (
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.ledger import IntentState, Ledger, ReviewKind
+from shipyap.publication.service import approve, load_candidate, reconcile, submit
+from shipyap.review import server as server_module
+from shipyap.review import service as review_service
+from shipyap.review.pages import (
     INTENT_GUIDANCE,
     NOT_CANCELLED,
     STOP_MESSAGE,
@@ -74,8 +74,8 @@ from public_research_os.review.pages import (
     StoryView,
     story_page,
 )
-from public_research_os.review.server import HOST, ReviewServer
-from public_research_os.review.service import (
+from shipyap.review.server import HOST, ReviewServer
+from shipyap.review.service import (
     REVISION_INFIX,
     Refusal,
     ReviewDesk,
@@ -87,13 +87,13 @@ from public_research_os.review.service import (
     schedule_phrase,
     x_digest,
 )
-from public_research_os.review.x_post import XPost
-from public_research_os.stories.discovery import run_discovery
+from shipyap.review.x_post import XPost
+from shipyap.stories.discovery import run_discovery
 
 E = PublicationErrorCode
 R = ReviewErrorCode
 _CONNECT = socket.socket.connect  # saved before the conftest guard replaces it
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 REVIEW = SRC / "review"
 
 SEGMENTS = (
@@ -1080,6 +1080,55 @@ def test_a_request_for_another_host_name_is_refused(work, serve, host):
     assert status == 400 and work.sid[:12] not in page
 
 
+def test_a_notification_link_signs_in_and_opens_that_draft(work, serve):
+    client = serve(work.desk())
+    client.cookie = None
+    status, headers, _ = client.request("GET", f"/?token={client.server.token}&story={work.sid}")
+    assert status == 303 and headers["Location"] == f"/story/{work.sid}"
+    client.cookie = headers["Set-Cookie"].split(";")[0]
+    status, _, page = client.request("GET", headers["Location"])
+    assert status == 200 and work.sid in page
+
+
+@pytest.mark.parametrize(
+    "story",
+    [
+        "",
+        "abc",
+        "A" * 64,
+        "0" * 63,
+        "0" * 65,
+        "0" * 64 + "%2F..",
+        "https://example.org",
+        "%2F%2Fexample.org",
+        "0" * 64 + "&story=" + "1" * 64,
+    ],
+    ids=[
+        "empty",
+        "short",
+        "uppercase",
+        "63-hex",
+        "65-hex",
+        "path-suffix",
+        "url",
+        "scheme-relative",
+        "repeated",
+    ],
+)
+def test_a_malformed_notification_story_lands_on_the_queue(work, serve, story):
+    client = serve(work.desk())
+    client.cookie = None
+    status, headers, _ = client.request("GET", f"/?token={client.server.token}&story={story}")
+    assert status == 303 and headers["Location"] == "/"
+
+
+def test_a_notification_link_with_a_wrong_token_is_refused(work, serve):
+    client = serve(work.desk())
+    client.cookie = None
+    status, headers, page = client.request("GET", f"/?token=wrong&story={work.sid}")
+    assert status == 403 and "Set-Cookie" not in headers and work.sid[:12] not in page
+
+
 def test_pages_and_actions_need_the_session(work, serve):
     client = serve(work.desk())
     client.cookie = None
@@ -1755,8 +1804,8 @@ def test_review_cannot_reach_buffer_the_model_or_the_environment():
     }
     for path in paths:
         imported = _imports(path)
-        assert "public_research_os.publication.buffer" not in imported, path.name
-        assert "public_research_os.drafting.provider" not in imported, path.name
+        assert "shipyap.publication.buffer" not in imported, path.name
+        assert "shipyap.drafting.provider" not in imported, path.name
         assert not any(name.split(".")[0] in {"anthropic", "subprocess"} for name in imported)
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Attribute):

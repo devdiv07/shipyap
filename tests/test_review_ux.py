@@ -22,10 +22,10 @@ from test_review import (
     work as work,
 )
 
-from public_research_os.editorial.models import FindingCode
-from public_research_os.publication.ledger import Ledger
-from public_research_os.review.pages import DEMO_GUIDE, StoryView, queue_page, story_page
-from public_research_os.review.ux import REASONS, attention_count, status
+from shipyap.editorial.models import FindingCode
+from shipyap.publication.ledger import Ledger
+from shipyap.review.pages import DEMO_GUIDE, StoryView, queue_page, story_page
+from shipyap.review.ux import REASONS, attention_count, status
 
 
 class Fields(HTMLParser):
@@ -207,7 +207,7 @@ def test_status_count_groups_multiple_notes_on_one_sentence(work):
 
 
 def test_changed_x_text_invalidates_the_confirmation(work, serve, monkeypatch):
-    from public_research_os.review.x_post import XPost
+    from shipyap.review.x_post import XPost
 
     client = serve(work.desk())
     key = sheet(client, work.sid)
@@ -219,7 +219,7 @@ def test_changed_x_text_invalidates_the_confirmation(work, serve, monkeypatch):
 
 
 def test_successful_confirmation_cannot_be_reused_after_rejection(work, serve):
-    from public_research_os.review.service import reject_phrase
+    from shipyap.review.service import reject_phrase
 
     client = serve(work.desk())
     key = sheet(client, work.sid)
@@ -231,12 +231,12 @@ def test_successful_confirmation_cannot_be_reused_after_rejection(work, serve):
 
 
 def test_both_launchers_print_one_box_without_opening_a_browser(tmp_path, monkeypatch, capsys):
-    from public_research_os.automation.demo import serve as demo_serve
-    from public_research_os.automation.initialise import initialise
-    from public_research_os.automation.review import serve as review_serve
-    from public_research_os.drafting import provider
-    from public_research_os.publication import buffer
-    from public_research_os.review.server import ReviewServer
+    from shipyap.automation.demo import serve as demo_serve
+    from shipyap.automation.initialise import initialise
+    from shipyap.automation.review import serve as review_serve
+    from shipyap.drafting import provider
+    from shipyap.publication import buffer
+    from shipyap.review.server import ReviewServer
 
     def stop(server):
         raise KeyboardInterrupt
@@ -263,7 +263,7 @@ def test_both_launchers_print_one_box_without_opening_a_browser(tmp_path, monkey
 def test_eval_copy_failure_never_claims_the_committed_decision_was_lost(
     work, serve, tmp_path, action
 ):
-    from public_research_os.review.service import reject_phrase
+    from shipyap.review.service import reject_phrase
 
     occupied = tmp_path / "occupied-eval-path"
     occupied.write_bytes(b"synthetic owner file")
@@ -295,7 +295,7 @@ def test_eval_copy_failure_never_claims_the_committed_decision_was_lost(
 def test_receipt_recovery_uses_actual_decision_not_per_story_sequence_arithmetic(
     work, serve, tmp_path, prior
 ):
-    from public_research_os.publication.ledger import ReviewKind
+    from shipyap.publication.ledger import ReviewKind
 
     desk = work.desk()
     if prior == "repeat":
@@ -324,7 +324,7 @@ def test_receipt_recovery_uses_actual_decision_not_per_story_sequence_arithmetic
 
 
 def test_fresh_demo_editor_is_the_first_section_inside_details():
-    from public_research_os.automation.demo import workspace
+    from shipyap.automation.demo import workspace
 
     with workspace() as demo:
         item = demo.desk.item(demo.story_id)

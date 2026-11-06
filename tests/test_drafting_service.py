@@ -32,27 +32,27 @@ from editorial_fake import (
     tree_digests,
 )
 
-from public_research_os.drafting import policy, service
-from public_research_os.drafting.errors import (
+from shipyap.drafting import policy, service
+from shipyap.drafting.errors import (
     DraftingError,
     DraftingErrorCode,
     GenerationRejected,
     Phase,
 )
-from public_research_os.drafting.policy import EFFORT, MAX_OUTPUT_TOKENS
-from public_research_os.drafting.prompt import (
+from shipyap.drafting.policy import EFFORT, MAX_OUTPUT_TOKENS
+from shipyap.drafting.prompt import (
     MODEL_OUTPUT_SCHEMA,
     SYSTEM_PROMPT,
     generator_label,
     wrap_response,
 )
-from public_research_os.drafting.service import plan_model_draft, run_model_draft
-from public_research_os.editorial.bundle import verify_bundle
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.inputs import RESPONSE_CAP_BYTES
-from public_research_os.editorial.models import RECORD_FILE, BundleKind
-from public_research_os.editorial.service import run_build
-from public_research_os.ingestion.assemble import SNAPSHOT_DIR
+from shipyap.drafting.service import plan_model_draft, run_model_draft
+from shipyap.editorial.bundle import verify_bundle
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.inputs import RESPONSE_CAP_BYTES
+from shipyap.editorial.models import RECORD_FILE, BundleKind
+from shipyap.editorial.service import run_build
+from shipyap.ingestion.assemble import SNAPSHOT_DIR
 
 MODEL = "claude-opus-5-5"
 

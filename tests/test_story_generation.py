@@ -23,14 +23,14 @@ from stories_fake import (
     ref,
 )
 
-from public_research_os.drafting.errors import DraftingError, DraftingErrorCode
-from public_research_os.drafting.models import ModelReply, ModelRequest
-from public_research_os.drafting.story_prompt import (
+from shipyap.drafting.errors import DraftingError, DraftingErrorCode
+from shipyap.drafting.models import ModelReply, ModelRequest
+from shipyap.drafting.story_prompt import (
     build_context,
     render_line,
     select_lines,
 )
-from public_research_os.drafting.story_service import (
+from shipyap.drafting.story_service import (
     StoryGenerationError,
     StoryGenerationErrorCode,
     StoryGenerationFailed,
@@ -38,11 +38,11 @@ from public_research_os.drafting.story_service import (
     reply_candidates,
     run_story_generation,
 )
-from public_research_os.editorial.sources import load_verified_snapshot
-from public_research_os.preferences.repositories import Mode, RepositoryPreferences
-from public_research_os.publication import buffer
-from public_research_os.stories.backlog import StoryBacklog
-from public_research_os.stories.errors import StoryError
+from shipyap.editorial.sources import load_verified_snapshot
+from shipyap.preferences.repositories import Mode, RepositoryPreferences
+from shipyap.publication import buffer
+from shipyap.stories.backlog import StoryBacklog
+from shipyap.stories.errors import StoryError
 
 RETIRED = "acme/retired-tool"
 RETIRED_FILES = {"README.md": b"# Retired\nThis tool cached 9 results per page.\n"}

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from public_research_os.evidence.models import Claim
-from public_research_os.publication.models import ContentPackage, PostVariant
+from shipyap.evidence.models import Claim
+from shipyap.publication.models import ContentPackage, PostVariant
 
 SNAPSHOT_BYTES = b'{"passed": 3, "total": 10}'
 

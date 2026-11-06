@@ -13,8 +13,8 @@ from pathlib import Path
 from drafting_fake import make_brief
 from editorial_fake import CLEAN_POST, CLEAN_SEGMENTS, make_snapshot, response, seg, write_json
 
-from public_research_os.editorial.service import run_build
-from public_research_os.publication.buffer import TransportFailure, TransportReply
+from shipyap.editorial.service import run_build
+from shipyap.publication.buffer import TransportFailure, TransportReply
 
 KEY = "bufkey-SENTINEL-0123456789abcdef"
 CHANNEL = "a1" * 12

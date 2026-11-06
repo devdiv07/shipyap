@@ -2,10 +2,10 @@ import pytest
 from publication_fake import CHANNEL, DUE, NOW
 from pydantic import ValidationError
 
-from public_research_os.publication.approval import Candidate, approval_id, confirmation_phrase
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.models import ContentPackage
-from public_research_os.publication.service import confirm
+from shipyap.publication.approval import Candidate, approval_id, confirmation_phrase
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.models import ContentPackage
+from shipyap.publication.service import confirm
 
 
 def test_fingerprint_is_stable(package):

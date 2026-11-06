@@ -10,11 +10,11 @@ from drafting_fake import REQUEST_ID, FakeApi
 from editorial_fake import SENTINEL
 from pydantic import SecretStr
 
-from public_research_os.drafting import provider
-from public_research_os.drafting.errors import DraftingError, DraftingErrorCode, Phase
-from public_research_os.drafting.models import ModelRequest
-from public_research_os.drafting.policy import EFFORT
-from public_research_os.drafting.prompt import STORY_PROMPT_VERSION, STORY_SYSTEM_PROMPT
+from shipyap.drafting import provider
+from shipyap.drafting.errors import DraftingError, DraftingErrorCode, Phase
+from shipyap.drafting.models import ModelRequest
+from shipyap.drafting.policy import EFFORT
+from shipyap.drafting.prompt import STORY_PROMPT_VERSION, STORY_SYSTEM_PROMPT
 
 MODEL = "claude-sonnet-5-5"
 

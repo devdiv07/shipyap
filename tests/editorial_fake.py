@@ -9,10 +9,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from public_research_os.ingestion.assemble import build_plan
-from public_research_os.ingestion.github import FetchedFile, FetchedSnapshot
-from public_research_os.ingestion.request import IngestionRequest
-from public_research_os.ingestion.writer import publish_snapshot
+from shipyap.ingestion.assemble import build_plan
+from shipyap.ingestion.github import FetchedFile, FetchedSnapshot
+from shipyap.ingestion.request import IngestionRequest
+from shipyap.ingestion.writer import publish_snapshot
 
 WORKSPACE = "demo_workspace"
 OWNER, REPO = "example-owner", "example-repo"

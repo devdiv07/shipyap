@@ -5,9 +5,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from stories_fake import ref
 
-from public_research_os.drafting.normalise import ChangeKind, DropReason, normalise_finding
-from public_research_os.editorial.grounding import number_tokens
-from public_research_os.stories.findings import StoryFinding
+from shipyap.drafting.normalise import ChangeKind, DropReason, normalise_finding
+from shipyap.editorial.grounding import number_tokens
+from shipyap.stories.findings import StoryFinding
 
 LINES = tuple(f"line {n} of the notes." for n in range(1, 41))
 LINES = (*LINES[:19], "Retries are capped", "at 2 per task.", *LINES[21:])  # lines 20-21

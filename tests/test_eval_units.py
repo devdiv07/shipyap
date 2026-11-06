@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 from stories_fake import ACTIVE, ACTIVE_FILES, ACTIVE_REVISION, active_finding, make_snapshot, ref
 
-from public_research_os.automation import evaluation
-from public_research_os.automation.cli import main
-from public_research_os.automation.state import State
-from public_research_os.drafting.models import ModelReply, Usage
-from public_research_os.drafting.normalise import normalise_finding
-from public_research_os.drafting.story_prompt import build_context
-from public_research_os.editorial.grounding import claim_numbers, labels
-from public_research_os.editorial.sources import load_verified_snapshot
-from public_research_os.preferences.repositories import Mode
-from public_research_os.stories.findings import StoryFinding
+from shipyap.automation import evaluation
+from shipyap.automation.cli import main
+from shipyap.automation.state import State
+from shipyap.drafting.models import ModelReply, Usage
+from shipyap.drafting.normalise import normalise_finding
+from shipyap.drafting.story_prompt import build_context
+from shipyap.editorial.grounding import claim_numbers, labels
+from shipyap.editorial.sources import load_verified_snapshot
+from shipyap.preferences.repositories import Mode
+from shipyap.stories.findings import StoryFinding
 
 
 def test_labels_are_names_and_need_only_to_exist_somewhere():

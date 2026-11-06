@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from public_research_os.evidence import snapshot
-from public_research_os.evidence.report import (
+from shipyap.evidence import snapshot
+from shipyap.evidence.report import (
     NOTICES,
     ErrorCode,
     EvidenceLabel,
@@ -22,8 +22,8 @@ from public_research_os.evidence.report import (
     render_record,
     render_text,
 )
-from public_research_os.evidence.snapshot import observe_digest
-from public_research_os.evidence.validation import (
+from shipyap.evidence.snapshot import observe_digest
+from shipyap.evidence.validation import (
     DigestObservation,
     EvidenceCheck,
     UnreadableInput,

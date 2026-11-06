@@ -1,4 +1,4 @@
-"""v0.1.0 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
+"""v0.1.2 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
 
 Offline: reads pyproject.toml and renders pages in memory; nothing is installed or served.
 """
@@ -8,22 +8,30 @@ from pathlib import Path
 
 import pytest
 
-from public_research_os.automation import cli
-from public_research_os.review.pages import layout, message_page, queue_page
+from shipyap.automation import cli
+from shipyap.review.pages import layout, message_page, queue_page
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 
-def test_the_release_version_is_0_1_0():
-    assert PROJECT["version"] == "0.1.0"
+def test_the_release_version_is_0_1_2():
+    assert PROJECT["version"] == "0.1.2"
 
 
 def test_shipyap_and_the_pros_alias_run_the_same_code():
     scripts = PROJECT["scripts"]
-    assert scripts["shipyap"] == "public_research_os.automation.cli:main"
+    assert scripts["shipyap"] == "shipyap.automation.cli:main"
     assert scripts["pros"] == scripts["shipyap"]
     assert set(scripts) == {"shipyap", "pros"}
+
+
+def test_the_distribution_and_package_are_named_shipyap():
+    import shipyap
+
+    assert PROJECT["name"] == "shipyap"
+    assert Path(shipyap.__file__).resolve().parent == ROOT / "src" / "shipyap"
+    assert not (ROOT / "src" / "public_research_os").exists()
 
 
 def test_help_names_the_shipyap_command(capsys):

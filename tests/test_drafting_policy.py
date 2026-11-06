@@ -8,8 +8,8 @@ import pytest
 from drafting_fake import model_output
 from editorial_fake import SENTINEL
 
-from public_research_os.drafting.models import Usage
-from public_research_os.drafting.policy import (
+from shipyap.drafting.models import Usage
+from shipyap.drafting.policy import (
     DEFAULT_MODEL,
     EFFORT,
     MAX_OUTPUT_TOKENS,
@@ -19,7 +19,7 @@ from public_research_os.drafting.policy import (
     offline_estimate,
     parse_budget,
 )
-from public_research_os.drafting.prompt import (
+from shipyap.drafting.prompt import (
     MODEL_KEYS,
     MODEL_OUTPUT_SCHEMA,
     SYSTEM_PROMPT,
@@ -28,9 +28,9 @@ from public_research_os.drafting.prompt import (
     safe_model_id,
     wrap_response,
 )
-from public_research_os.editorial.errors import EditorialError, EditorialErrorCode
-from public_research_os.editorial.inputs import parse_response
-from public_research_os.editorial.models import (
+from shipyap.editorial.errors import EditorialError, EditorialErrorCode
+from shipyap.editorial.inputs import parse_response
+from shipyap.editorial.models import (
     Basis,
     DraftResponse,
     Generator,

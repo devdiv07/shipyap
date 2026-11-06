@@ -11,7 +11,7 @@ REQUIRED = (
     "pyproject.toml",
     "docs/architecture.md",
     "docs/security/threat-model.md",
-    "src/public_research_os/publication/port.py",
+    "src/shipyap/publication/port.py",
 )
 AGENT_KIT = ("prompts", "skills-src", ".claude", ".agents")
 KIT_REQUIRED = (

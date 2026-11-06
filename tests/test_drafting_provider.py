@@ -15,11 +15,11 @@ from opentelemetry import trace
 from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 from pydantic import SecretStr
 
-from public_research_os.drafting import provider
-from public_research_os.drafting.errors import DraftingError, DraftingErrorCode, Phase
-from public_research_os.drafting.models import ModelRequest, Usage
-from public_research_os.drafting.policy import EFFORT, MAX_OUTPUT_TOKENS
-from public_research_os.drafting.prompt import MODEL_OUTPUT_SCHEMA, SYSTEM_PROMPT
+from shipyap.drafting import provider
+from shipyap.drafting.errors import DraftingError, DraftingErrorCode, Phase
+from shipyap.drafting.models import ModelRequest, Usage
+from shipyap.drafting.policy import EFFORT, MAX_OUTPUT_TOKENS
+from shipyap.drafting.prompt import MODEL_OUTPUT_SCHEMA, SYSTEM_PROMPT
 
 REQUEST = ModelRequest(
     model=MODEL,

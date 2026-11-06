@@ -7,11 +7,11 @@ from datetime import datetime
 import pytest
 from public_fake import directory_link
 
-from public_research_os.automation import initialise as module
-from public_research_os.automation.cli import main
-from public_research_os.automation.config import load_config
-from public_research_os.automation.initialise import InitError, initialise
-from public_research_os.preferences.repositories import RepositoryPreferences
+from shipyap.automation import initialise as module
+from shipyap.automation.cli import main
+from shipyap.automation.config import load_config
+from shipyap.automation.initialise import InitError, initialise
+from shipyap.preferences.repositories import RepositoryPreferences
 
 REPO = "sample-owner/retry-lab"
 

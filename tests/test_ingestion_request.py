@@ -3,12 +3,12 @@ import json
 import pytest
 from github_fake import OWNER, REPO, REVISION, WORKSPACE, request_bytes, request_document
 
-from public_research_os.evidence.manifest import SourceManifest
-from public_research_os.evidence.models import Claim
-from public_research_os.evidence.report import ErrorCode
-from public_research_os.evidence.validation import UnreadableInput
-from public_research_os.ingestion.errors import IngestErrorCode, IngestionError
-from public_research_os.ingestion.request import (
+from shipyap.evidence.manifest import SourceManifest
+from shipyap.evidence.models import Claim
+from shipyap.evidence.report import ErrorCode
+from shipyap.evidence.validation import UnreadableInput
+from shipyap.ingestion.errors import IngestErrorCode, IngestionError
+from shipyap.ingestion.request import (
     IngestionRequest,
     RepoRef,
     parse_allow_repo,

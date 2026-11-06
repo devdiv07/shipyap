@@ -11,17 +11,17 @@ from drafting_fake import FakeDrafter, model_text, reply
 from editorial_fake import seg
 from stories_fake import HISTORIC, findings, historic_finding, make_snapshot, ref, write_json
 
-from public_research_os.drafting.story_draft import (
+from shipyap.drafting.story_draft import (
     OutputState,
     StoryDraftFailed,
     plan_story_draft,
     recover_story_draft,
     run_story_draft,
 )
-from public_research_os.preferences.repositories import RepositoryPreferences
-from public_research_os.stories.backlog import StoryBacklog, StoryState
-from public_research_os.stories.discovery import run_discovery
-from public_research_os.stories.errors import StoryError, StoryErrorCode
+from shipyap.preferences.repositories import RepositoryPreferences
+from shipyap.stories.backlog import StoryBacklog, StoryState
+from shipyap.stories.discovery import run_discovery
+from shipyap.stories.errors import StoryError, StoryErrorCode
 
 NOW = datetime(2026, 10, 27, tzinfo=UTC)
 SEGMENTS = (

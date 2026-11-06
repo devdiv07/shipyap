@@ -125,7 +125,10 @@ uv sync --locked --no-dev
 .\scripts\setup.ps1 -Config 'C:\work\my-posts\pros.toml' -EnablePaid
 ```
 
-Omit `-EnablePaid` for free runs. Remove the timer with `.\scripts\setup.ps1 -Remove`.
+Omit `-EnablePaid` for free runs. When a draft is ready, the notification says how many drafts
+are waiting and has a **Review** button that opens that draft on the review page. If the page is
+already open, the button reuses it. Setup registers a `shipyap://` link handler for your Windows
+user only. Remove the timer and the handler with `.\scripts\setup.ps1 -Remove`.
 
 ## Ask an AI to help set up
 
@@ -149,6 +152,6 @@ or use my API keys. Do not run paid calls, approve, schedule, or publish anythin
 - **Existing workspace error:** Check that its stores are readable and use `shipyap repo set` to add a
   new repo. Initialization does not overwrite an existing workspace.
 
-`shipyap` is the command; `pros` remains as an alias. The Python package is `public_research_os`.
+`shipyap` is the command; `pros` remains as an alias. The Python package is `shipyap`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

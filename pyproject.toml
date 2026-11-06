@@ -3,8 +3,8 @@ requires = ["hatchling>=1.26,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "public-research-os"
-version = "0.1.0"
+name = "shipyap"
+version = "0.1.2"
 description = "Shipyap: you ship. It yaps. With receipts."
 readme = "README.md"
 license = "MIT"
@@ -17,14 +17,14 @@ dependencies = [
 ]
 
 [project.scripts]
-shipyap = "public_research_os.automation.cli:main"
-pros = "public_research_os.automation.cli:main"
+shipyap = "shipyap.automation.cli:main"
+pros = "shipyap.automation.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.9,<1", "hypothesis>=6,<7"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/public_research_os"]
+packages = ["src/shipyap"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

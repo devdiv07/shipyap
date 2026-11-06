@@ -6,9 +6,9 @@ from datetime import timedelta
 import pytest
 from publication_fake import CHANNEL, DUE, NOW, POST_ID, POST_TEXT
 
-from public_research_os.publication.approval import Candidate
-from public_research_os.publication.errors import PublicationError, PublicationErrorCode
-from public_research_os.publication.ledger import FINAL_STATES, IntentState, Ledger
+from shipyap.publication.approval import Candidate
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.ledger import FINAL_STATES, IntentState, Ledger
 
 E = PublicationErrorCode
 S = IntentState

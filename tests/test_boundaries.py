@@ -16,18 +16,18 @@ test_<package>_boundaries files.
 import ast
 from pathlib import Path
 
-from public_research_os.drafting.provider import API_KEY_ENV as MODEL_KEY_ENV
-from public_research_os.publication.buffer import API_KEY_ENV as BUFFER_KEY_ENV
-from public_research_os.publication.buffer import PUBLISHING_DISABLED_ENV
+from shipyap.drafting.provider import API_KEY_ENV as MODEL_KEY_ENV
+from shipyap.publication.buffer import API_KEY_ENV as BUFFER_KEY_ENV
+from shipyap.publication.buffer import PUBLISHING_DISABLED_ENV
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "public_research_os"
+SRC = Path(__file__).resolve().parents[1] / "src" / "shipyap"
 TRANSPORT = SRC / "ingestion" / "transport.py"
 PROVIDER = SRC / "drafting" / "provider.py"
 BUFFER = SRC / "publication" / "buffer.py"
 BUFFER_NETWORK = frozenset({"http", "ssl"})
 REVIEW_SERVER = SRC / "review" / "server.py"
 REVIEW_NETWORK = frozenset({"http", "urllib"})
-LAZY_MODULES = ("public_research_os.drafting.provider", "public_research_os.publication.buffer")
+LAZY_MODULES = ("shipyap.drafting.provider", "shipyap.publication.buffer")
 
 NETWORK_MODULES = frozenset(
     {
