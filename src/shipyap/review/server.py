@@ -32,6 +32,7 @@ from urllib.parse import parse_qs, urlsplit
 from shipyap.editorial.errors import EditorialError
 from shipyap.publication.approval import Candidate, confirmation_phrase
 from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.history import fingerprint
 from shipyap.publication.ledger import ReviewSubject
 from shipyap.publication.port import SchedulingProvider
 from shipyap.review.pages import (
@@ -69,7 +70,9 @@ _HEADERS = (
     ("Cache-Control", "no-store"),
 )
 _Failure = (ReviewError, PublicationError, EditorialError, StoryError)
-_HALTED_BY_STOP = frozenset({"sheet", "approve", "schedule"})  # edit and reject send nothing
+_HALTED_BY_STOP = frozenset(
+    {"sheet", "repost-sheet", "approve", "schedule"}
+)  # edit and reject send nothing
 
 
 @dataclass
@@ -81,6 +84,7 @@ class Confirmation:
     x_post: XPost
     completed_seq: int | None = None
     warning: tuple[str, ...] = ()
+    repost_history: str | None = None
 
 
 class ReviewServer(HTTPServer):
@@ -186,6 +190,7 @@ class _Handler(BaseHTTPRequestHandler):
         handler = {
             "edit": self._edit,
             "sheet": self._sheet,
+            "repost-sheet": self._repost_sheet,
             "approve": self._approve,
             "cancel": self._cancel,
             "reject": self._reject,
@@ -281,16 +286,28 @@ class _Handler(BaseHTTPRequestHandler):
             self._story(sid, StoryView(texts=texts, full_range=full, preview=preview, focus="edit"))
         )
 
-    def _sheet(self, sid: str, form: dict[str, str], seq: int) -> None:
+    def _repost_sheet(self, sid: str, form: dict[str, str], seq: int) -> None:
+        self._sheet(sid, form, seq, repost=True)
+
+    def _sheet(self, sid: str, form: dict[str, str], seq: int, *, repost: bool = False) -> None:
         try:
             item = self.server.desk.item(sid)
             if item.seq != seq:
                 raise PublicationError(PublicationErrorCode.REVIEW_STALE)
             sheet = self.server.desk.approval_candidate(
-                sid, form.get("channel_id", ""), form.get("due_at", ""), self.server.clock()
+                sid,
+                form.get("channel_id", ""),
+                form.get("due_at", ""),
+                self.server.clock(),
+                repost=repost,
             )
             x_sheet = self.server.desk.x_sheet(sid, sheet)
             pending = Confirmation(secrets.token_urlsafe(32), item.subject(), seq, sheet, x_sheet)
+            if repost:
+                matches = self.server.desk.repost_history(item, sheet)
+                if not matches:
+                    raise PublicationError(PublicationErrorCode.REPOST_CONFIRMATION_REQUIRED)
+                pending.repost_history = fingerprint(matches)
             self.server.confirmations[sid] = pending
         except _Failure as exc:
             self._render(
@@ -309,7 +326,13 @@ class _Handler(BaseHTTPRequestHandler):
         self._render(
             self._story(
                 sid,
-                StoryView(sheet=sheet, x_sheet=x_sheet, confirmation=pending.key, focus="approve"),
+                StoryView(
+                    sheet=sheet,
+                    x_sheet=x_sheet,
+                    confirmation=pending.key,
+                    focus="approve",
+                    repost=repost,
+                ),
             )
         )
 
@@ -321,7 +344,12 @@ class _Handler(BaseHTTPRequestHandler):
                 or not _equal(form.get("confirmation", ""), pending.key)
                 or seq != pending.seq
                 or form.get("confirm") != "yes"
-                or set(form) != {"seq", "confirmation", "confirm"}
+                or set(form)
+                != (
+                    {"seq", "confirmation", "confirm", "typed"}
+                    if pending.repost_history
+                    else {"seq", "confirmation", "confirm"}
+                )
             ):
                 raise PublicationError(PublicationErrorCode.REVIEW_STALE)
             item = self.server.desk.item(sid)
@@ -342,7 +370,11 @@ class _Handler(BaseHTTPRequestHandler):
                     return
                 raise PublicationError(PublicationErrorCode.REVIEW_STALE)
             candidate = self.server.desk.approval_candidate(
-                sid, pending.candidate.channel_id, pending.candidate.due_at, self.server.clock()
+                sid,
+                pending.candidate.channel_id,
+                pending.candidate.due_at,
+                self.server.clock(),
+                repost=pending.repost_history is not None,
             )
             post = self.server.desk.x_sheet(sid, candidate)
             if item.seq != pending.seq or candidate != pending.candidate or post != pending.x_post:
@@ -355,6 +387,8 @@ class _Handler(BaseHTTPRequestHandler):
                 seq,
                 self.server.clock(),
                 x_digest(post),
+                repost_typed=form.get("typed") if pending.repost_history is not None else None,
+                history_sha256=pending.repost_history,
             )
             pending.completed_seq = decision.seq
         except _Failure as exc:

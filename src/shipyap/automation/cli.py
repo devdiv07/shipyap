@@ -79,7 +79,7 @@ def _tell(config, result, posted: list[str]) -> None:
 
 
 def _eval(parser, args) -> int:
-    from shipyap.automation import evaluation
+    from shipyap.automation import evaluation, publication_replay
 
     if args.cases is None and args.workspace is None:
         parser.error("eval needs --cases, --workspace or both")
@@ -101,6 +101,7 @@ def _eval(parser, args) -> int:
             stories += evaluation.load_workspace(args.workspace)
         decisions = evaluation.load_decisions(args.workspace) if args.workspace else []
         report = evaluation.evaluate(stories, drafts, decisions)
+        publications = publication_replay.load_replays(args.cases) if args.cases else []
         expected = (
             json.loads((args.cases / "expected.json").read_text(encoding="utf-8"))
             if args.check
@@ -114,6 +115,10 @@ def _eval(parser, args) -> int:
         sys.stdout.reconfigure(errors="backslashreplace")  # model text on a legacy console
     for line in evaluation.render(report):
         print(line)
+    for result in publications:
+        print(
+            f"PUBLICATION {result.name}: recorded sends={result.recorded_sends}; replay creates={result.create_calls}; outcomes={', '.join(result.outcomes)}"
+        )
     live = None
     if args.workspace is not None:
         from shipyap.automation import live_drafts
@@ -135,6 +140,7 @@ def _eval(parser, args) -> int:
     if not args.check:
         return 0
     failures = evaluation.gate_failures(report, expected)
+    failures += publication_replay.failures(publications, expected.get("publications", {}))
     if args.workspace is not None:
         pins = expected.get("workspace_drafts") or {}
         if live is not None or pins:
@@ -260,7 +266,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Offline: list saved repositories and modes, including those set to off.",
     )
     repo_list.add_argument("--db", type=Path, required=True, help="local SQLite preferences file")
+    publication = subcommands.add_parser(
+        "publication", help="preview or explicitly apply offline publication-history migration"
+    )
+    publication.add_argument("action", choices=("migrate",))
+    publication.add_argument("--ledger", type=Path, required=True)
+    publication.add_argument("--drafts", type=Path)
+    publication.add_argument(
+        "--apply",
+        action="store_true",
+        help="explicitly change this ledger; omit for a disposable-copy preview",
+    )
     args = parser.parse_args(argv)
+    if args.command == "publication":
+        from shipyap.publication.errors import PublicationError
+        from shipyap.publication.migration import migrate, preview
+
+        try:
+            result = (
+                migrate(args.ledger, args.drafts)
+                if args.apply
+                else preview(args.ledger, args.drafts)
+            )
+        except (PublicationError, sqlite3.Error, OSError, ValueError, KeyError):
+            print(
+                "PUBLICATION_MIGRATION_FAILED: the selected ledger or identity evidence is unusable"
+            )
+            return 2
+        print(json.dumps(result, indent=2))
+        return 1 if result["unresolved_approvals"] else 0
     if args.command == "init":
         from shipyap.automation.initialise import InitError, initialise
 

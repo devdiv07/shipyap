@@ -257,7 +257,7 @@ def test_a_foreign_or_corrupt_file_is_refused_and_left_unchanged(tmp_path):
 
 def test_preference_changes_leave_publisher_records_untouched_and_files_are_not_shared(tmp_path):
     ledger_path = tmp_path / "ledger.sqlite"
-    candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64)
+    candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64, "a" * 64)
     with Ledger.open(ledger_path, create=True) as ledger:
         approval = ledger.add_approval(candidate, NOW)
         ledger.begin_send(approval.approval_id, NOW)
@@ -286,7 +286,14 @@ def test_preference_changes_leave_publisher_records_untouched_and_files_are_not_
 # --- first-use initialization is one atomic claim ----------------------------------------------
 
 PREFERENCES_TABLES = {"repository_preferences"}
-LEDGER_TABLES = {"approvals", "intents", "review_decisions"}  # the last since schema 2 (06E)
+LEDGER_TABLES = {
+    "approvals",
+    "intents",
+    "review_decisions",
+    "publication_bindings",
+    "repost_grants",
+    "publication_reservations",
+}  # the last since schema 2 (06E)
 # store name -> (opener, typed error, refusal code, the tables it owns)
 STORES = {
     "preferences": (RepositoryPreferences, PreferencesError, E.STORE_UNUSABLE, PREFERENCES_TABLES),
@@ -430,7 +437,7 @@ def test_an_initialized_store_keeps_its_records_and_refuses_the_other_store(path
         with RepositoryPreferences.open(path, create=True) as store:
             store.set_mode(HISTORIC, "focus", NOW)
     else:
-        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64)
+        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64, "a" * 64)
         with Ledger.open(path, create=True) as ledger:
             ledger.begin_send(ledger.add_approval(candidate, NOW).approval_id, NOW)
     before = digest(path)
@@ -484,7 +491,7 @@ def test_a_store_with_records_survives_analyze_and_opens_with_either_setting(pat
             store.set_mode(HISTORIC, "focus", NOW)
             store.set_mode("owner/other", "off", NOW)
     else:
-        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64)
+        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64, "a" * 64)
         with Ledger.open(path, create=True) as ledger:
             ledger.begin_send(ledger.add_approval(candidate, NOW).approval_id, NOW)
     before = stored_records(path, owner)
@@ -590,7 +597,7 @@ def test_an_initialized_store_with_an_unexpected_schema_object_is_refused(path, 
         with RepositoryPreferences.open(path, create=True) as store:
             store.set_mode(HISTORIC, "focus", NOW)
     else:
-        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64)
+        candidate = Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64, "a" * 64)
         with Ledger.open(path, create=True) as ledger:
             ledger.begin_send(ledger.add_approval(candidate, NOW).approval_id, NOW)
     analyze(path)

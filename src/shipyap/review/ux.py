@@ -64,7 +64,22 @@ def attention_count(gate: Gate) -> int:
     )
 
 
+def publication_status(item: ReviewItem) -> str | None:
+    sent = [p for p in item.publications if p.state == "SENT"]
+    if sent:
+        post = min(sent, key=lambda p: p.created_at)
+        return f"Published {post.updated_at[:10]} (UTC confirmation date)"
+    scheduled = [p for p in item.publications if p.state == "SCHEDULED"]
+    if scheduled:
+        post = min(scheduled, key=lambda p: p.due_at)
+        return f"Scheduled {post.due_at} (UTC)"
+    return None
+
+
 def status(item: ReviewItem, gate: Gate | None = None) -> str:
+    durable = publication_status(item)
+    if durable:
+        return durable
     if item.state == ReviewState.REJECTED:
         return "Rejected"
     intent = item.intent

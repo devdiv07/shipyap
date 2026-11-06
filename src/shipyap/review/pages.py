@@ -23,6 +23,7 @@ from shipyap.editorial.models import (
 from shipyap.publication.approval import (
     Candidate,
 )
+from shipyap.publication.history import repost_phrase
 from shipyap.publication.ledger import (
     LEAD_ACCEPTED,
     Intent,
@@ -264,6 +265,7 @@ class StoryView:
     channel_id: str | None = None
     due_at: str | None = None
     typed: str = ""
+    repost: bool = False
 
 
 def story_page(
@@ -289,11 +291,11 @@ def story_page(
     unsaved = view.texts is not None and (view.preview is None or view.preview.changed)
     if state == "Not fact-checked - cannot approve":
         pass
-    elif stopped:
+    elif stopped and not item.publications:
         state = "Stopped - approval and scheduling are paused"
-    elif unsaved:
+    elif unsaved and not item.publications:
         state = "Unsaved edits - save or discard them before approving"
-    elif item.state == ReviewState.UNAPPROVED and count:
+    elif item.state == ReviewState.UNAPPROVED and count and not item.publications:
         state = f"{count} {'thing needs' if count == 1 else 'things need'} your attention"
     parts = [
         _demo_intro(demo),
@@ -317,17 +319,36 @@ def story_page(
     if view.done:
         parts.append(f"<p class=done>{e(view.done)}</p>")
     parts.append(flagged(item, gate, records))
+    if item.duplicate_posts:
+        parts.append(
+            "<div class=notice><p>Earlier publication history locks ordinary approval and scheduling. A repeat needs typed Repost.</p>"
+            + "".join(
+                f"<p>{e(p.state)} {e(p.due_at)}; post {e(p.post_id or 'outcome uncertain')}; {e(p.rule)} {p.score:.0%}</p><details><summary>Earlier text</summary><pre>{e(p.text)}</pre></details>"
+                for p in item.duplicate_posts
+            )
+            + "</div>"
+        )
+
     if item.withdrawn_intents:
         parts.append(f"<p class=notice>{e(NOT_CANCELLED)}</p>")
     if item.state == ReviewState.REJECTED:
-        parts.append("<p>A rejection is final for this story.</p>")
-    if item.state != ReviewState.REJECTED:
+        parts.append(
+            "<p>This review was rejected; another publication requires typed Repost.</p>"
+            if item.publications
+            else "<p>A rejection is final for this story.</p>"
+        )
+    if item.state != ReviewState.REJECTED or item.publications:
         parts.append("<section id=approve>")
         if not stopped:
             parts.append(_approve_section(item, token, view, defaults, gate))
         parts.append("</section>")
-        parts.append(_reject_section(item, token, view))
-    if item.state == ReviewState.APPROVED and not demo:
+        if item.state != ReviewState.REJECTED:
+            parts.append(_reject_section(item, token, view))
+    if (
+        item.state == ReviewState.APPROVED
+        and not demo
+        and (not item.publications or item.repost_ready or item.intent is not None)
+    ):
         section = _schedule_section(item, token, scheduling and not stopped, None, x_state)
         if view.focus == "schedule":
             section = section.replace(
@@ -686,21 +707,32 @@ def _approve_section(item, token, view, defaults=None, gate=None) -> str:
     sid = e(item.story.story_id)
     if view.texts is not None and (view.preview is None or view.preview.changed):
         return f'<p>Save or discard the edit first. <a href="/story/{sid}#approve">Discard the edit</a></p>'
+    repeat = bool(item.publications or item.duplicate_posts or view.repost)
+    label = "Repost" if repeat else "Approve"
+    if item.repost_ready and item.intent is None:
+        return "<p>A typed repost approval is recorded for this exact post. Send it below.</p>"
     if item.stale or (gate is not None and not gate.approvable):
-        return "<button disabled>Approve</button><p>Fix the Must fix items before approving.</p>"
+        return f"<button disabled>{label}</button><p>Fix the Must fix items before {label.lower()}.</p>"
+
     if view.sheet is not None and view.confirmation is not None:
         sheet = view.sheet
         x_post = view.x_sheet or XPost(None, "not shown")
         return (
-            "<h2>Approve this exact post?</h2><h3>LinkedIn</h3>"
+            f"<h2>{'Repost' if view.repost else 'Approve'} this exact post?</h2><h3>LinkedIn</h3>"
             f"<div class=post><pre>{e(sheet.text)}</pre></div>"
             f"<p>LinkedIn target time {e(sheet.due_at)} (UTC). Approving sends nothing; Buffer has not scheduled it.</p>"
             f"<details><summary>Destination details</summary><p>Channel: {e(sheet.channel_id)}</p></details>"
             f"<h3>X (same slot, after LinkedIn)</h3>{_x_text(x_post)}"
             f"<form method=post action=/story/{sid}/approve#approve>{_hidden(token, item.seq)}"
             f"<input type=hidden name=confirmation value={_q(view.confirmation)}>"
-            "<button autofocus name=confirm value=yes>Confirm approval</button></form>"
-            f"<form method=post action=/story/{sid}/cancel#approve>{_hidden(token, item.seq)}"
+            + (
+                f"<p>Type exactly: <b>{e(repost_phrase(item.story.story_id, sheet))}</b></p>"
+                '<input type=text name=typed autocomplete=off aria-label="repost phrase">'
+                "<button autofocus name=confirm value=yes>Confirm typed repost</button></form>"
+                if view.repost
+                else "<button autofocus name=confirm value=yes>Confirm approval</button></form>"
+            )
+            + f"<form method=post action=/story/{sid}/cancel#approve>{_hidden(token, item.seq)}"
             f"<input type=hidden name=confirmation value={_q(view.confirmation)}><button>Cancel</button></form>"
         )
     channel = (
@@ -712,12 +744,12 @@ def _approve_section(item, token, view, defaults=None, gate=None) -> str:
     opened = " open" if not channel or not due or view.error and view.focus == "approve" else ""
     focus = " autofocus" if view.focus == "approve" else ""
     return (
-        f"<form method=post action=/story/{sid}/sheet#approve>{_hidden(token, item.seq)}"
+        f"<form method=post action=/story/{sid}/{'repost-sheet' if repeat else 'sheet'}#approve>{_hidden(token, item.seq)}"
         f"<details{opened}><summary>Posting destination and time</summary>"
         f"<label>LinkedIn channel id<input{focus} type=text name=channel_id value={_q(channel)} autocomplete=off></label>"
         f"<label>Target time (UTC)<input type=text name=due_at value={_q(due)} autocomplete=off></label>"
         f"<p>{e(defaults.local if defaults else 'Choose the destination and a future time.')}</p></details>"
-        "<button>Approve</button><p class=muted>Approving records your decision. It sends nothing.</p></form>"
+        f"<button>{'Review repost' if repeat else 'Approve'}</button><p class=muted>Recording your decision sends nothing.</p></form>"
     )
 
 
@@ -761,7 +793,11 @@ def _schedule_section(
     approval = item.approval
     if approval is None:
         return ""
-    parts = ["<h2>Schedule with Buffer</h2>"]
+    if item.publications and item.intent is None and not item.repost_ready:
+        return "<p>This story was already submitted. Only the typed Repost path can create another post.</p>"
+    parts = [
+        "<h2>Send confirmed repost</h2>" if item.repost_ready else "<h2>Schedule with Buffer</h2>"
+    ]
     intent = item.intent
     if intent is not None:
         parts.append(_intent_panel(intent))
@@ -801,7 +837,7 @@ def _schedule_section(
             f"<form method=post action=/story/{sid}/schedule#schedule>{_hidden(token, item.seq)}"
             f"<input type=hidden name=approval_id value={_q(approval.approval_id)}>"
             '<input type=text name=typed autocomplete=off aria-label="scheduling phrase">'
-            "<button>Schedule approved post</button></form></div>"
+            f"<button>{'Send confirmed repost' if item.repost_ready else 'Schedule approved post'}</button></form></div>"
         )
     else:
         parts.append(

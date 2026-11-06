@@ -61,7 +61,9 @@ _E = PublicationErrorCode
 # --- the reviewed artifact ---------------------------------------------------------------------
 
 
-def load_candidate(bundle_dir: Path, channel_id: str, due_at: str, now: datetime) -> Candidate:
+def load_candidate(
+    bundle_dir: Path, channel_id: str, due_at: str, now: datetime, *, story_id: str | None = None
+) -> Candidate:
     """The exact post that `bundle_dir`, `channel_id` and `due_at` describe, or a refusal.
 
     The text is `draft.txt` without its single terminating newline (the editorial writer's file
@@ -103,6 +105,7 @@ def load_candidate(bundle_dir: Path, channel_id: str, due_at: str, now: datetime
         due_at=due,
         workspace_id=bundle.record.workspace_id,
         bundle_record_sha256=bundle.record_sha256,
+        story_id=story_id,
     )
 
 
@@ -146,6 +149,7 @@ def submit(
     *,
     service: str = LINKEDIN,
     lead_approval_id: str | None = None,
+    origin: str = "service",
 ) -> SubmitResult:
     """Make at most one provider request for an approved post.
 
@@ -194,11 +198,17 @@ def submit(
     _TEXT_CHECKS[service](approval.text)
     if ledger.get_intent(approval.approval_id) is not None:  # no network call for a duplicate
         raise PublicationError(_E.DUPLICATE_SUBMISSION)
+    binding = ledger.publication_binding(approval_id)
+    if binding is None or (candidate.story_id is not None and candidate.story_id != binding[1]):
+        raise PublicationError(_E.PUBLICATION_IDENTITY_REQUIRED)
+    ledger.check_publication(approval_id, lead_approval_id)
     provider.check_destination(approval.channel_id, service)
 
     # Committed; from here the post may be sent. The review checks above run again inside this
     # transaction, so a rejection committed during the destination check still stops the send.
-    ledger.begin_send(approval.approval_id, now, candidate.bundle_record_sha256, lead_approval_id)
+    ledger.begin_send(
+        approval.approval_id, now, candidate.bundle_record_sha256, lead_approval_id, origin=origin
+    )
     outcome = provider.create_scheduled_post(approval.text, approval.channel_id, approval.due_at)
     new_state = {
         CreateKind.ACCEPTED: IntentState.ACCEPTED,

@@ -33,7 +33,7 @@ def ledger(path):
 
 @pytest.fixture
 def candidate():
-    return Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64)
+    return Candidate(POST_TEXT, CHANNEL, DUE, "demo_workspace", "e" * 64, "a" * 64)
 
 
 @pytest.fixture

@@ -105,6 +105,7 @@ class Candidate:
     due_at: str
     workspace_id: str
     bundle_record_sha256: str
+    story_id: str | None = None
 
     @property
     def approval_id(self) -> str:

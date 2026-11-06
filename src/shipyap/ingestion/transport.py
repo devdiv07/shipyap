@@ -33,7 +33,7 @@ from shipyap.ingestion.github import API_VERSION, Limits, TransportResponse
 
 API_HOST = "api.github.com"
 API_PORT = 443
-USER_AGENT = "public-research-os-ingestion/0.1.2"
+USER_AGENT = "public-research-os-ingestion/0.1.3"
 
 _API_PATH = re.compile(
     r"/repos/[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}(?:"

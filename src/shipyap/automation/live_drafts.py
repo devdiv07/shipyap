@@ -30,6 +30,7 @@ class LiveDraft:
     reason: str
     fact_check: str  # COMPLETE, INHERITED or REQUIRED
     refusal: str | None = None  # why the page does not list it, when it does not
+    ordinary_publication_eligible: bool = False
 
 
 def _copy_db(source: Path, target: Path) -> Path:
@@ -53,7 +54,7 @@ def _codes(reasons) -> str:
 
 def replay_live(workspace: Path) -> list[LiveDraft]:
     """Raises AutomationError (config), ReviewError or sqlite3.Error when unreadable."""
-    from shipyap.review.service import ReviewDesk, ReviewError
+    from shipyap.review.service import ReviewDesk, ReviewError, ReviewState
     from shipyap.review.ux import status
 
     config = load_config(workspace / CONFIG_FILE)
@@ -66,6 +67,11 @@ def replay_live(workspace: Path) -> list[LiveDraft]:
     with tempfile.TemporaryDirectory(prefix="pros-live-") as tmp:
         backlog = _copy_db(config.backlog, Path(tmp) / "story-backlog.sqlite")
         ledger = _copy_db(config.state / REVIEW_LEDGER, Path(tmp) / REVIEW_LEDGER)
+        # Explicit upgrade of the disposable copy only, never the source workspace.
+        from shipyap.publication.migration import migrate
+
+        if ledger.is_file():
+            migrate(ledger, config.drafts)
         desk = ReviewDesk(
             config.drafts,
             backlog,
@@ -116,6 +122,10 @@ def replay_live(workspace: Path) -> list[LiveDraft]:
                     reason,
                     basis,
                     refusal,
+                    gate.approvable
+                    and item.state != ReviewState.REJECTED
+                    and not item.publications
+                    and not item.duplicate_posts,
                 )
             )
     return sorted(found, key=lambda d: d.story_id)
@@ -127,7 +137,8 @@ def render(drafts: list[LiveDraft]) -> list[str]:
         listed = f"; not listed: {draft.refusal}" if draft.refusal else ""
         lines.append(
             f"LIVE {draft.story_id[:16]}: approvable: {'yes' if draft.approvable else 'no'} "
-            f"({draft.reason}); fact check {draft.fact_check}; page: {draft.status}{listed}"
+            f"({draft.reason}); fact check {draft.fact_check}; page: {draft.status}{listed}; "
+            f"ordinary publication eligible: {'yes' if draft.ordinary_publication_eligible else 'no'}"
         )
     lines.append(f"LIVE TOTAL drafts={len(drafts)} approvable={sum(d.approvable for d in drafts)}")
     return lines
@@ -151,6 +162,15 @@ def pin_failures(drafts: list[LiveDraft], pins: dict) -> list[str]:
             failures.append(
                 f"LIVE {story_id[:16]}: fact check {got.fact_check}, pinned {want['fact_check']}"
             )
+        if (
+            "ordinary_publication_eligible" in want
+            and got.ordinary_publication_eligible != want["ordinary_publication_eligible"]
+        ):
+            failures.append(
+                f"LIVE {story_id[:16]}: ordinary publication eligibility differs from pin"
+            )
+        if "publication_status" in want and got.status != want["publication_status"]:
+            failures.append(f"LIVE {story_id[:16]}: publication status differs from pin")
     for story_id in live:
         if story_id not in pins:
             failures.append(f"LIVE {story_id[:16]}: not pinned in expected.json workspace_drafts")

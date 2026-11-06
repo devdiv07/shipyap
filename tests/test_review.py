@@ -824,7 +824,7 @@ def test_review_decisions_cannot_be_changed_or_deleted(work):
         connection.close()
 
 
-def test_a_schema_1_ledger_is_upgraded_in_place_and_keeps_its_approvals(tmp_path):
+def test_a_schema_1_ledger_requires_explicit_migration_and_keeps_its_approvals(tmp_path):
     """A ledger written before 06E (approval and intent) opens, even for scheduling, gains the
     review table, and its approval is unaffected: it was never reviewed."""
     path = tmp_path / "ledger.sqlite"
@@ -838,11 +838,19 @@ def test_a_schema_1_ledger_is_upgraded_in_place_and_keeps_its_approvals(tmp_path
     )
     connection.execute("PRAGMA user_version = 1")
     connection.close()
+    from shipyap.publication.migration import migrate
+
+    assert refused(Ledger.open, path, create=False) == E.LEDGER_MIGRATION_REQUIRED
+    report = migrate(path)
+    assert report["unresolved_approvals"] == [candidate.approval_id]
     with Ledger.open(path, create=False) as ledger:
         assert ledger.get_approval(candidate.approval_id).text == "A post."
         assert not ledger.approval_withdrawn(candidate.approval_id)
-        assert ledger._db.execute("PRAGMA user_version").fetchone()[0] == 2
-        ledger.begin_send(candidate.approval_id, NOW)  # the schema 1 contract still works
+        assert ledger._db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert (
+            refused(ledger.begin_send, candidate.approval_id, NOW)
+            == E.PUBLICATION_IDENTITY_REQUIRED
+        )
 
 
 def test_a_schema_1_file_with_anything_else_is_not_upgraded(tmp_path):

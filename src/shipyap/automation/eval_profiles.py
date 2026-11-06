@@ -44,6 +44,10 @@ def public_cases(base: Path) -> Path:
             raise ValueError
         for path in stories:
             contained("snapshots/" + json.loads(path.read_text("utf-8"))["snapshot"])
+        for path in (root / "publications").glob("*.history.json"):
+            value = json.loads(path.read_text("utf-8"))
+            contained(value["original_response"])
+            contained(value["brief"])
         return root
     except (OSError, ValueError, TypeError, KeyError):
         raise ValueError("PUBLIC_CASES_INVALID") from None

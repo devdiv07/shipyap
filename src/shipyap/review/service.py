@@ -114,6 +114,7 @@ from shipyap.evidence.snapshot import read_input
 from shipyap.evidence.strict_json import StrictJsonError, loads_strict
 from shipyap.publication.approval import Approval, Candidate
 from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.history import PriorPost
 from shipyap.publication.ledger import (
     LEAD_ACCEPTED,
     Intent,
@@ -308,6 +309,9 @@ class ReviewItem:
     # command made it. One for an approval that is no longer current means a request was made
     # before a later decision withdrew it locally.
     intents: tuple[Intent, ...] = ()
+    publications: tuple[PriorPost, ...] = ()
+    duplicate_posts: tuple[PriorPost, ...] = ()
+    repost_ready: bool = False
     repaired: Draft | None = None  # the auto-repaired draft offered instead of the origin
     repair: dict | None = None  # its repair record (CLEAN)
 
@@ -672,16 +676,18 @@ class ReviewDesk:
         return decision
 
     def approval_candidate(
-        self, story_id: str, channel_id: str, due_at: str, now: datetime
+        self, story_id: str, channel_id: str, due_at: str, now: datetime, *, repost: bool = False
     ) -> Candidate:
         """The exact post an approval would bind, for the owner to read before typing."""
         item = self.item(story_id)
-        if item.state == ReviewState.REJECTED:
+        if item.state == ReviewState.REJECTED and not (repost and item.publications):
             raise PublicationError(PublicationErrorCode.REVIEW_CLOSED)
         if item.stale:
             raise ReviewError(ReviewErrorCode.STALE_DRAFT)
         candidate = self._candidate(item, channel_id, due_at, now)
         self._require_gate(item)
+        if not repost:
+            self._require_fresh_publication(item, candidate)
         return candidate
 
     def approve(
@@ -693,6 +699,9 @@ class ReviewDesk:
         expected_seq: int,
         now: datetime,
         x_seen: str | None = None,
+        *,
+        repost_typed: str | None = None,
+        history_sha256: str | None = None,
     ) -> tuple[Approval, ReviewDecision]:
         """`x_seen` is the `x_digest` of the X text on the sheet the owner approved from; with an
         X channel configured it must match the X text the draft gives now."""
@@ -707,7 +716,13 @@ class ReviewDesk:
             raise PublicationError(PublicationErrorCode.REVIEW_STALE)
         with Ledger.open(self.ledger_path, create=False) as ledger:
             approval, decision = ledger.add_reviewed_approval(
-                item.subject(), candidate, expected_seq, now, follow_on
+                item.subject(),
+                candidate,
+                expected_seq,
+                now,
+                follow_on,
+                repost_typed=repost_typed,
+                history_sha256=history_sha256,
             )
         self._save_case(item, decision, item.current, item.current)
         return approval, decision
@@ -759,7 +774,10 @@ class ReviewDesk:
             result = None
             if ledger.get_intent(approval.approval_id) is None or x_state.approval is None:
                 # LinkedIn first (a duplicate is refused here, as before).
-                result = submit(ledger, provider(), candidate, approval.approval_id, now)
+                ledger.check_publication(approval.approval_id)
+                result = submit(
+                    ledger, provider(), candidate, approval.approval_id, now, origin="review"
+                )
             lead = ledger.get_intent(approval.approval_id)
             if (
                 x_state.approval is None
@@ -773,6 +791,7 @@ class ReviewDesk:
                     raise PublicationError(PublicationErrorCode.LEAD_NOT_ACCEPTED)
                 return result  # Buffer did not accept LinkedIn: X gets nothing
             follow_on = self._x_candidate(x_state.post, approval)
+            ledger.check_publication(x_state.approval.approval_id, approval.approval_id)
             return submit(
                 ledger,
                 provider(),
@@ -781,6 +800,7 @@ class ReviewDesk:
                 now,
                 service=X,
                 lead_approval_id=approval.approval_id,
+                origin="review",
             )
 
     # --- internals -------------------------------------------------------------------------
@@ -864,7 +884,9 @@ class ReviewDesk:
         self, item: ReviewItem, channel_id: str, due_at: str, now: datetime
     ) -> Candidate:
         # The publisher's own loader: COMPLETE, READY_FOR_REVIEW, no blocking finding.
-        candidate = load_candidate(item.current.directory, channel_id, due_at, now)
+        candidate = load_candidate(
+            item.current.directory, channel_id, due_at, now, story_id=item.story.story_id
+        )
         if candidate.bundle_record_sha256 != item.current.record_sha256:
             raise PublicationError(PublicationErrorCode.REVIEW_STALE)  # changed while loading
         return candidate
@@ -877,7 +899,41 @@ class ReviewDesk:
             due_at=lead.due_at,
             workspace_id=lead.workspace_id,
             bundle_record_sha256=lead.bundle_record_sha256,
+            story_id=lead.story_id
+            if isinstance(lead, Candidate)
+            else self.item_story(lead.approval_id),
         )
+
+    def item_story(self, approval_id: str) -> str | None:
+        with Ledger.open(self.ledger_path, create=False) as ledger:
+            bound = ledger.publication_binding(approval_id)
+            return bound[1] if bound else None
+
+    def repost_history(self, item: ReviewItem, candidate: Candidate):
+        with Ledger.open(self.ledger_path, create=False) as ledger:
+            found = {
+                p.approval_id: p
+                for p in ledger.publication_conflicts(
+                    item.story.story_id, candidate.text, candidate.approval_id
+                )
+            }
+            post = self.x_post(item)
+            if post.text is not None and self.x_channel_id:
+                for match in ledger.publication_conflicts(
+                    item.story.story_id, post.text, candidate.approval_id
+                ):
+                    found[match.approval_id] = match
+            return tuple(found.values())
+
+    def _require_fresh_publication(self, item: ReviewItem, candidate: Candidate) -> None:
+        matches = self.repost_history(item, candidate)
+        if matches:
+            code = (
+                PublicationErrorCode.STORY_ALREADY_SUBMITTED
+                if any(p.story_id == item.story.story_id for p in matches)
+                else PublicationErrorCode.NEAR_DUPLICATE_POST
+            )
+            raise PublicationError(code)
 
     def _follow_on(self, item: ReviewItem, candidate: Candidate) -> tuple[XPost, Candidate | None]:
         """The X text and the X candidate an approval of `candidate` records with it."""
@@ -953,7 +1009,7 @@ class ReviewDesk:
                 raise _Refused(Refusal.DECISION_MISMATCH)
         named = dict.fromkeys(d.approval_id for d in decisions if d.approval_id)
         intents = tuple(i for i in map(ledger.get_intent, named) if i is not None)
-        return ReviewItem(
+        item = ReviewItem(
             story,
             link,
             link_sha256,
@@ -962,9 +1018,18 @@ class ReviewDesk:
             decisions,
             approval,
             intents,
-            repaired,
-            repair,
+            publications=ledger.publication_posts(story_id),
+            duplicate_posts=ledger.publication_conflicts(story_id, current.text, ""),
+            repost_ready=ledger.has_repost_grant(approval.approval_id) if approval else False,
+            repaired=repaired,
+            repair=repair,
         )
+        matches = {post.approval_id: post for post in item.duplicate_posts}
+        x = self.x_post(item)
+        if x.text is not None and self.x_channel_id:
+            for post in ledger.publication_conflicts(story_id, x.text, ""):
+                matches[post.approval_id] = post
+        return replace(item, duplicate_posts=tuple(matches.values()))
 
     def _repaired(self, story_id: str, origin: Draft) -> tuple[Draft | None, dict | None]:
         """The CLEAN auto-repaired draft and its record; (None, None) without a record."""

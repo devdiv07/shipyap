@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "story_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "original_response": "drafts/valid-control.response.json",
+  "brief": "drafts/retry.brief.json",
+  "original_response_sha256": "dc42ec3662e962f27f76e61450828f85ba4d7048106b08d6f4d6b7b8c73ff61c",
+  "original_text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+  "recorded_sends": 3,
+  "approvals": [
+    {
+      "approval_id": "e5d0754e6bb0ed35bd1ff102ec52b1c8e45b24c070aeb936c19f94c2160102df",
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+      "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+      "channel_id": "a1a1a1a1a1a1a1a1a1a1a1a1",
+      "due_at": "2026-11-02T04:00:00Z",
+      "workspace_id": "sample_workspace",
+      "bundle_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "approved_at": "2026-10-29T11:53:28Z"
+    },
+    {
+      "approval_id": "f339b7f748308f40992c64ffc27c38ae6cfb2686e5ba92ce6d8a5290f2dd91b2",
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+      "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+      "channel_id": "a1a1a1a1a1a1a1a1a1a1a1a1",
+      "due_at": "2026-11-06T04:00:00Z",
+      "workspace_id": "sample_workspace",
+      "bundle_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "approved_at": "2026-11-03T12:36:52Z"
+    },
+    {
+      "approval_id": "c4dea7d105e479ce2b96f3be0b5a4994d8ce59fd5bdb8cbef3f2b6369e6037c4",
+      "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+      "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+      "channel_id": "a1a1a1a1a1a1a1a1a1a1a1a1",
+      "due_at": "2026-11-09T04:00:00Z",
+      "workspace_id": "sample_workspace",
+      "bundle_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "approved_at": "2026-11-03T12:49:36Z"
+    }
+  ],
+  "events": [
+    {
+      "kind": "review",
+      "at": "2026-10-29T11:47:56Z",
+      "row": {
+        "seq": 1,
+        "story_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "REVISED",
+        "approval_id": null,
+        "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+        "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+        "draft_bundle": "sample-draft",
+        "draft_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "origin_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "link_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "decided_at": "2026-10-29T11:47:56Z"
+      }
+    },
+    {
+      "kind": "review",
+      "at": "2026-10-29T11:53:28Z",
+      "row": {
+        "seq": 2,
+        "story_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "APPROVED",
+        "approval_id": "e5d0754e6bb0ed35bd1ff102ec52b1c8e45b24c070aeb936c19f94c2160102df",
+        "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+        "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+        "draft_bundle": "sample-draft",
+        "draft_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "origin_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "link_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "decided_at": "2026-10-29T11:53:28Z"
+      }
+    },
+    {
+      "kind": "submit",
+      "at": "2026-10-29T12:03:37Z",
+      "approval_id": "e5d0754e6bb0ed35bd1ff102ec52b1c8e45b24c070aeb936c19f94c2160102df",
+      "recorded_post_id": "c3c3c3c3c3c3c3c3c3c3c3c3",
+      "recorded_final_state": "SENT",
+      "recorded_updated_at": "2026-11-02T04:58:05Z"
+    },
+    {
+      "kind": "state",
+      "at": "2026-11-02T04:58:05Z",
+      "approval_id": "e5d0754e6bb0ed35bd1ff102ec52b1c8e45b24c070aeb936c19f94c2160102df",
+      "state": "SENT"
+    },
+    {
+      "kind": "review",
+      "at": "2026-11-03T12:36:52Z",
+      "row": {
+        "seq": 9,
+        "story_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "APPROVED",
+        "approval_id": "f339b7f748308f40992c64ffc27c38ae6cfb2686e5ba92ce6d8a5290f2dd91b2",
+        "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+        "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+        "draft_bundle": "sample-draft",
+        "draft_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "origin_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "link_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "decided_at": "2026-11-03T12:36:52Z"
+      }
+    },
+    {
+      "kind": "submit",
+      "at": "2026-11-03T12:37:16Z",
+      "approval_id": "f339b7f748308f40992c64ffc27c38ae6cfb2686e5ba92ce6d8a5290f2dd91b2",
+      "recorded_post_id": "c3c3c3c3c3c3c3c3c3c3c3c3",
+      "recorded_final_state": "ACCEPTED",
+      "recorded_updated_at": "2026-11-03T12:37:16Z"
+    },
+    {
+      "kind": "review",
+      "at": "2026-11-03T12:49:36Z",
+      "row": {
+        "seq": 10,
+        "story_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "APPROVED",
+        "approval_id": "c4dea7d105e479ce2b96f3be0b5a4994d8ce59fd5bdb8cbef3f2b6369e6037c4",
+        "text": "The toy queue recovered 3/10 jobs in the supplied exercise. Its log records the outcome for each job separately, so a reader can distinguish a completed action from a response that merely reports that action as complete. Retries are capped at 2 per job in this exercise. A worker consults the saved journal before sending another request, and the journal entry records the attempted action as well as the response that was actually observed by the worker.\n\nA worker writes an intent before contacting the toy service. When a response is lost, the saved intent remains available to the next worker; the later worker reads that record instead of treating silence as a completed response. The caller reuses the job token when retrying an unchanged action. A different action requires a different token, and the exercise keeps the original journal entry available so that a reviewer can compare the attempted actions directly.\n\nScope: this is synthetic evidence only and does not measure production reliability.",
+        "text_sha256": "bf559eb6b385220989128094504dd7d402c604f3e03221ffd0f706aac3939284",
+        "draft_bundle": "sample-draft",
+        "draft_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "origin_record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "link_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "decided_at": "2026-11-03T12:49:36Z"
+      }
+    },
+    {
+      "kind": "submit",
+      "at": "2026-11-03T12:49:44Z",
+      "approval_id": "c4dea7d105e479ce2b96f3be0b5a4994d8ce59fd5bdb8cbef3f2b6369e6037c4",
+      "recorded_post_id": "c3c3c3c3c3c3c3c3c3c3c3c3",
+      "recorded_final_state": "SCHEDULED",
+      "recorded_updated_at": "2026-11-06T18:47:02Z"
+    }
+  ]
+}

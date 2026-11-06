@@ -65,7 +65,7 @@ def ledger(path):
 
 @pytest.fixture
 def candidate(bundle):
-    return load_candidate(bundle, CHANNEL, DUE, NOW)
+    return load_candidate(bundle, CHANNEL, DUE, NOW, story_id="a" * 64)
 
 
 @pytest.fixture

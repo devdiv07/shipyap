@@ -42,6 +42,11 @@ class PublicationErrorCode(StrEnum):
     LEDGER_UNUSABLE = "LEDGER_UNUSABLE"
     LEDGER_WRITE_FAILED = "LEDGER_WRITE_FAILED"
     DUPLICATE_SUBMISSION = "DUPLICATE_SUBMISSION"
+    LEDGER_MIGRATION_REQUIRED = "LEDGER_MIGRATION_REQUIRED"
+    PUBLICATION_IDENTITY_REQUIRED = "PUBLICATION_IDENTITY_REQUIRED"
+    STORY_ALREADY_SUBMITTED = "STORY_ALREADY_SUBMITTED"
+    NEAR_DUPLICATE_POST = "NEAR_DUPLICATE_POST"
+    REPOST_CONFIRMATION_REQUIRED = "REPOST_CONFIRMATION_REQUIRED"
     # Provider reads.
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_UNEXPECTED_RESPONSE = "PROVIDER_UNEXPECTED_RESPONSE"
@@ -49,6 +54,11 @@ class PublicationErrorCode(StrEnum):
 
 
 MESSAGES: dict[PublicationErrorCode, str] = {
+    PublicationErrorCode.LEDGER_MIGRATION_REQUIRED: "publication history needs an explicit offline migration; preview a disposable copy first",
+    PublicationErrorCode.PUBLICATION_IDENTITY_REQUIRED: "publication story identity is missing or ambiguous; scheduling is blocked",
+    PublicationErrorCode.STORY_ALREADY_SUBMITTED: "this story already has a submission; only an explicit typed repost can start another publication",
+    PublicationErrorCode.NEAR_DUPLICATE_POST: "this text repeats an earlier post; inspect its history and explicitly confirm a repost",
+    PublicationErrorCode.REPOST_CONFIRMATION_REQUIRED: "the exact repost phrase and unchanged matching history are required",
     PublicationErrorCode.PUBLISHING_DISABLED: (
         "publishing is disabled; it is enabled only by PUBLISHING_DISABLED=false in the "
         "environment of the trusted publisher shell"

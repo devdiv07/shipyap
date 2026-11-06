@@ -33,6 +33,7 @@ States and what they claim:
 - MISMATCH     read-back text, channel or time differs from what was approved.
 """
 
+import hmac
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,8 +42,10 @@ from pathlib import Path
 
 from shipyap.publication.approval import Approval, Candidate, text_sha256
 from shipyap.publication.errors import PublicationError, PublicationErrorCode
+from shipyap.publication.history import SCHEMA as HISTORY_SCHEMA
+from shipyap.publication.history import History, fingerprint, repost_phrase
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class IntentState(StrEnum):
@@ -135,7 +138,7 @@ _SCHEMA_V2 = (
     """CREATE TRIGGER review_decisions_no_delete BEFORE DELETE ON review_decisions
        BEGIN SELECT RAISE(ABORT, 'review decisions are permanent'); END""",
 )
-_SCHEMA = (*_SCHEMA_V1, *_SCHEMA_V2)
+_SCHEMA = (*_SCHEMA_V1, *_SCHEMA_V2, *HISTORY_SCHEMA)
 
 
 def _application_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str]]:
@@ -163,6 +166,7 @@ def _expected_objects(schema: tuple[str, ...]) -> frozenset[tuple[str, str, str]
 
 _EXPECTED_OBJECTS = _expected_objects(_SCHEMA)
 _V1_OBJECTS = _expected_objects(_SCHEMA_V1)
+_V2_OBJECTS = _expected_objects((*_SCHEMA_V1, *_SCHEMA_V2))
 
 
 @dataclass(frozen=True)
@@ -231,11 +235,10 @@ class Ledger:
                 for statement in _SCHEMA:
                     connection.execute(statement)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif version == 1 and objects == _V1_OBJECTS:
-                # Schema 1 -> 2 only adds the review table; no existing row is touched.
-                for statement in _SCHEMA_V2:
-                    connection.execute(statement)
-                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            elif (version == 1 and objects == _V1_OBJECTS) or (
+                version == 2 and objects == _V2_OBJECTS
+            ):
+                raise PublicationError(PublicationErrorCode.LEDGER_MIGRATION_REQUIRED)
             elif version != SCHEMA_VERSION or objects != _EXPECTED_OBJECTS:
                 raise PublicationError(PublicationErrorCode.LEDGER_UNUSABLE)  # incl. mixed files
             connection.execute("COMMIT")
@@ -263,9 +266,18 @@ class Ledger:
 
     def add_approval(self, candidate: Candidate, approved_at: datetime) -> Approval:
         """Record an approval. Approving the identical post again returns the existing row."""
-        row = _approval_row(candidate, approved_at)
         try:
-            self._db.execute("INSERT OR IGNORE INTO approvals VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                self._insert_approval(candidate, approved_at)
+                if candidate.story_id is not None:
+                    History(self._db).bind(
+                        candidate.approval_id, candidate.story_id, candidate.approval_id
+                    )
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._rollback()
+                raise
         except sqlite3.Error:
             raise PublicationError(PublicationErrorCode.LEDGER_WRITE_FAILED) from None
         stored = self.get_approval(candidate.approval_id)
@@ -319,6 +331,9 @@ class Ledger:
         expected_seq: int,
         now: datetime,
         follow_on: Candidate | None = None,
+        *,
+        repost_typed: str | None = None,
+        history_sha256: str | None = None,
     ) -> tuple[Approval, ReviewDecision]:
         """Record the approval and its APPROVED decision in ONE transaction, so an approval made in
         review never exists without the decision that can later withdraw it.
@@ -335,7 +350,15 @@ class Ledger:
         ):
             raise ValueError("the follow-on is not the same draft and time")  # programming error
         decision = self._decide(
-            subject, ReviewKind.APPROVED, candidate.text, candidate, expected_seq, now, follow_on
+            subject,
+            ReviewKind.APPROVED,
+            candidate.text,
+            candidate,
+            expected_seq,
+            now,
+            follow_on,
+            repost_typed,
+            history_sha256,
         )
         approval = self.get_approval(candidate.approval_id)
         if approval is None:
@@ -375,6 +398,8 @@ class Ledger:
         expected_seq: int,
         now: datetime,
         follow_on: Candidate | None = None,
+        repost_typed: str | None = None,
+        history_sha256: str | None = None,
     ) -> ReviewDecision:
         try:
             self._db.execute("BEGIN IMMEDIATE")
@@ -390,7 +415,11 @@ class Ledger:
                     return latest  # the same action again: no second row
                 if (latest.seq if latest else 0) != expected_seq:
                     raise PublicationError(PublicationErrorCode.REVIEW_STALE)
-                if latest is not None and latest.decision == ReviewKind.REJECTED:
+                if (
+                    latest is not None
+                    and latest.decision == ReviewKind.REJECTED
+                    and not (repost_typed is not None and History(self._db).posts(subject.story_id))
+                ):
                     raise PublicationError(PublicationErrorCode.REVIEW_CLOSED)
                 approval_id = None
                 if candidate is not None:
@@ -398,6 +427,37 @@ class Ledger:
                     for bound in (candidate, follow_on):
                         if bound is not None:
                             self._insert_approval(bound, now)
+                            if bound.story_id is not None and bound.story_id != subject.story_id:
+                                raise PublicationError(PublicationErrorCode.APPROVAL_MISMATCH)
+                            History(self._db).bind(
+                                bound.approval_id, subject.story_id, candidate.approval_id
+                            )
+                    history = History(self._db)
+                    conflicts = history.cycle_conflicts(candidate.approval_id)
+                    if repost_typed is not None:
+                        if (
+                            not conflicts
+                            or history_sha256 != fingerprint(conflicts)
+                            or not hmac.compare_digest(
+                                repost_typed.encode(),
+                                repost_phrase(subject.story_id, candidate).encode(),
+                            )
+                        ):
+                            raise PublicationError(
+                                PublicationErrorCode.REPOST_CONFIRMATION_REQUIRED
+                            )
+                        self._db.execute(
+                            "INSERT INTO repost_grants VALUES (?, ?, ?, ?, ?, 'review')",
+                            (
+                                candidate.approval_id,
+                                subject.story_id,
+                                candidate.bundle_record_sha256,
+                                fingerprint(conflicts),
+                                stamp(now),
+                            ),
+                        )
+                    history.check(candidate.approval_id)
+
                 cursor = self._db.execute(
                     "INSERT INTO review_decisions (story_id, decision, approval_id, text, "
                     "text_sha256, draft_bundle, draft_record_sha256, origin_record_sha256, "
@@ -442,6 +502,28 @@ class Ledger:
             # rather than a decision the row contradicts.
             raise PublicationError(PublicationErrorCode.APPROVAL_CONFLICT)
 
+    def has_repost_grant(self, approval_id: str) -> bool:
+        return (
+            self._db.execute(
+                "SELECT 1 FROM repost_grants WHERE approval_id=?", (approval_id,)
+            ).fetchone()
+            is not None
+        )
+
+    def publication_binding(self, approval_id: str) -> tuple | None:
+        return History(self._db).binding(approval_id)
+
+    def publication_posts(self, story_id: str | None = None):
+        return History(self._db).posts(story_id)
+
+    def publication_conflicts(self, story_id: str, text: str, cycle_id: str):
+        return History(self._db).conflicts(story_id, text, cycle_id)
+
+    def check_publication(self, approval_id: str, lead_id: str | None = None):
+        if self.get_intent(approval_id) is not None:
+            raise PublicationError(PublicationErrorCode.DUPLICATE_SUBMISSION)
+        return History(self._db).check(approval_id, lead_id)
+
     # --- intents -----------------------------------------------------------------------------
 
     def get_intent(self, approval_id: str) -> Intent | None:
@@ -471,6 +553,8 @@ class Ledger:
         now: datetime,
         bundle_record_sha256: str | None = None,
         lead_approval_id: str | None = None,
+        *,
+        origin: str = "service",
     ) -> Intent:
         """Commit the SENDING intent. Returns only after the commit; the caller sends afterwards.
 
@@ -509,11 +593,13 @@ class Ledger:
                     ).fetchone()
                     if lead is None or IntentState(lead[0]) not in LEAD_ACCEPTED:
                         raise PublicationError(PublicationErrorCode.LEAD_NOT_ACCEPTED)
+                History(self._db).check(approval_id, lead_approval_id)
                 self._db.execute(
                     "INSERT INTO intents (approval_id, state, provider_post_id, detail_code, "
                     "created_at, updated_at) VALUES (?, 'SENDING', NULL, NULL, ?, ?)",
                     (approval_id, stamped, stamped),
                 )
+                History(self._db).reserve(approval_id, stamped, origin)
                 self._db.execute("COMMIT")
             except BaseException:
                 self._rollback()

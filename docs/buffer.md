@@ -67,3 +67,39 @@ if using its terminal):
 Read and approve the exact post, then separately confirm scheduling. Approval alone sends nothing.
 Unsetting the flag, or using any value other than `false`, disables new scheduling after review
 restarts. A workspace `STOP` file pauses new actions; it cannot cancel posts already sent to Buffer.
+
+## Existing workspaces: preview the publication ledger upgrade
+
+Version 0.1.3 requires an explicit ledger upgrade. Starting review does not upgrade an old ledger.
+Stop the review server and keep the workspace STOP file in place. First run this offline preview:
+
+```powershell
+shipyap publication migrate --ledger 'C:\work\my-posts\automation\review-ledger.sqlite' --drafts 'C:\work\my-posts\drafts'
+```
+
+The preview opens the original database read-only and upgrades a temporary copy. It lists every
+earlier submission, identifies legacy duplicates and reports unresolved approvals. It preserves
+the original approval, decision and intent rows. Inspect this result before changing the real ledger;
+back up the workspace, then repeat with `--apply` only when you choose to migrate it. An unresolved
+historical submission blocks all new sends rather than being ignored. No migration contacts Buffer.
+
+## Earlier posts and intentional reposts
+
+A story already submitted cannot be sent again by editing it, approving a new revision or choosing
+a different date. Published and scheduled stories keep their dated status even after later review
+decisions. The Published date is when the local ledger confirmed publication, which may be later
+than Buffer actually published it. An accepted or uncertain submission also prevents a fresh send.
+Deleting a post in Buffer does not unlock it locally.
+
+To post it again intentionally, choose **Review repost**, inspect the exact text, destination, time
+and matching earlier posts, then type the displayed `REPOST` phrase. This records your approval
+and a permission for this one exact repost. Separately confirm **Send confirmed repost**. Changing
+the post or adding new matching publication history invalidates that permission. The original
+approved LinkedIn/X pair shares one publication cycle; its unsent X companion can finish without
+resending LinkedIn.
+
+The same guard blocks equal or lexically near-identical text across different stories, including
+queued and uncertain sends. Unicode, case, spacing and punctuation are normalized; high token
+similarity and substantial overlapping text also block. Matching text and the rule are shown for
+review. This is a local lexical check, not semantic paraphrase detection, and covers only posts
+recorded in this workspace's ledger. No model call is made for it.

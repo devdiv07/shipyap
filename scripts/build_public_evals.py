@@ -65,6 +65,99 @@ def segment(sid: str, text: str, refs=(), *, basis="SOURCE", authors=()) -> dict
     }
 
 
+def publication_case(expected: dict) -> None:
+    """Synthetic repeated-story history, independent of any private incident inputs."""
+    from shipyap.editorial.grounding import render_post
+    from shipyap.editorial.models import DraftResponse
+    from shipyap.publication.approval import approval_id, text_sha256
+
+    raw = (ROOT / "drafts/valid-control.response.json").read_bytes()
+    text = render_post(DraftResponse.model_validate_json(raw).segments)
+    approvals, events = [], []
+    story = "a" * 64
+    for seq, approved, submitted, due in (
+        (2, "2026-10-29T11:53:28Z", "2026-10-29T12:03:37Z", "2026-11-02T04:00:00Z"),
+        (9, "2026-11-03T12:36:52Z", "2026-11-03T12:37:16Z", "2026-11-06T04:00:00Z"),
+        (10, "2026-11-03T12:49:36Z", "2026-11-03T12:49:44Z", "2026-11-09T04:00:00Z"),
+    ):
+        aid = approval_id(text, "a1" * 12, due)
+        approvals.append(
+            dict(
+                approval_id=aid,
+                text=text,
+                text_sha256=text_sha256(text),
+                channel_id="a1" * 12,
+                due_at=due,
+                workspace_id="sample_workspace",
+                bundle_record_sha256="b" * 64,
+                approved_at=approved,
+            )
+        )
+        row = dict(
+            seq=seq,
+            story_id=story,
+            decision="APPROVED",
+            approval_id=aid,
+            text=text,
+            text_sha256=text_sha256(text),
+            draft_bundle="sample-draft",
+            draft_record_sha256="b" * 64,
+            origin_record_sha256="b" * 64,
+            link_sha256="c" * 64,
+            decided_at=approved,
+        )
+        if seq == 2:
+            revision = {
+                **row,
+                "seq": 1,
+                "decision": "REVISED",
+                "approval_id": None,
+                "decided_at": "2026-10-29T11:47:56Z",
+            }
+            events.append(dict(kind="review", at=revision["decided_at"], row=revision))
+        events.append(dict(kind="review", at=approved, row=row))
+        events.append(
+            dict(
+                kind="submit",
+                at=submitted,
+                approval_id=aid,
+                recorded_post_id="c3" * 12,
+                recorded_final_state={2: "SENT", 9: "ACCEPTED", 10: "SCHEDULED"}[seq],
+                recorded_updated_at={
+                    2: "2026-11-02T04:58:05Z",
+                    9: submitted,
+                    10: "2026-11-06T18:47:02Z",
+                }[seq],
+            )
+        )
+        if seq == 2:
+            events.append(
+                dict(kind="state", at="2026-11-02T04:58:05Z", approval_id=aid, state="SENT")
+            )
+    events.sort(key=lambda e: e["at"])
+    write(
+        ROOT / "publications/repeated-story.history.json",
+        dict(
+            version=1,
+            story_id=story,
+            original_response="drafts/valid-control.response.json",
+            brief="drafts/retry.brief.json",
+            original_response_sha256=hashlib.sha256(raw).hexdigest(),
+            original_text_sha256=text_sha256(text),
+            recorded_sends=3,
+            approvals=approvals,
+            events=events,
+        ),
+    )
+    expected["publications"] = {
+        "repeated-story.history": dict(
+            recorded_sends=3,
+            create_calls=1,
+            outcomes=["ACCEPTED", "STORY_ALREADY_SUBMITTED", "STORY_ALREADY_SUBMITTED"],
+        )
+    }
+
+
 def main() -> None:
     lines = ["# SYNTHETIC retry exercise", ""]
     for text in TEXTS:
@@ -326,6 +419,9 @@ def main() -> None:
         },
     )
     write(ROOT / "drafts.json", {"cases": cases})
+    for name in ("hash-aside", "missing-scope", "fixture-repair"):
+        expected["drafts"][name]["repair"]["fact_check"] = "REQUIRED"
+    publication_case(expected)
     write(ROOT / "expected.json", expected)
     finding = {
         "story_key": "journal-before-request",

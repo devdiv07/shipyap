@@ -121,5 +121,16 @@
   "max_false_alarms": 0,
   "repair_totals": {
     "min_clean": 3
+  },
+  "publications": {
+    "repeated-story.history": {
+      "recorded_sends": 3,
+      "create_calls": 1,
+      "outcomes": [
+        "ACCEPTED",
+        "STORY_ALREADY_SUBMITTED",
+        "STORY_ALREADY_SUBMITTED"
+      ]
+    }
   }
 }
