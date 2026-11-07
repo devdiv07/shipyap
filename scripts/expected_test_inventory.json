@@ -1475,7 +1475,7 @@
     ["tests.test_release", "test_an_unknown_command_is_refused_under_the_shipyap_name"],
     ["tests.test_release", "test_help_names_the_shipyap_command"],
     ["tests.test_release", "test_post_text_uses_proportional_font_while_source_pre_keeps_monospace"],
-    ["tests.test_release", "test_readme_has_project_badges_and_keeps_the_screenshot_placeholder"],
+    ["tests.test_release", "test_readme_has_project_badges_and_the_demo_screenshot"],
     ["tests.test_release", "test_review_and_demo_page_titles_say_shipyap[demo]"],
     ["tests.test_release", "test_review_and_demo_page_titles_say_shipyap[review]"],
     ["tests.test_release", "test_shipyap_and_the_pros_alias_run_the_same_code"],

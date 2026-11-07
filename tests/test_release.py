@@ -19,7 +19,7 @@ def test_the_release_version_is_0_1_5():
     assert PROJECT["version"] == "0.1.5"
 
 
-def test_readme_has_project_badges_and_keeps_the_screenshot_placeholder():
+def test_readme_has_project_badges_and_the_demo_screenshot():
     readme = (ROOT / "README.md").read_text("utf-8")
     badges = readme.split("**You ship.")[0]
     clone = next(line for line in readme.splitlines() if line.startswith("git clone https://"))
@@ -28,7 +28,16 @@ def test_readme_has_project_badges_and_keeps_the_screenshot_placeholder():
     assert f"{repo}/actions/workflows/ci.yml/badge.svg" in badges
     assert f"github/v/release/{repo}" in badges
     assert "[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)" in badges
-    assert "<!-- Screenshot placeholder:" in readme
+    image = (
+        "![Shipyap catching a false claim: the draft says 9/10, the cited repo line says 3/10.]"
+        "(docs/assets/review-demo.png)"
+    )
+    caption = "The demo's sample draft. Shipyap blocks a number the repo doesn't support."
+    assert readme.index("**You ship.") < readme.index(image) < readme.index(caption)
+    assert readme.index(caption) < readme.index("Turn your GitHub work")
+    assert "<!-- Screenshot placeholder:" not in readme
+    png = (ROOT / "docs/assets/review-demo.png").read_bytes()
+    assert png.startswith(b"\x89PNG\r\n\x1a\n") and len(png) < 300_000
 
 
 def test_post_text_uses_proportional_font_while_source_pre_keeps_monospace():

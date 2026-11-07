@@ -6,14 +6,16 @@
 
 **You ship. It yaps. With receipts.**
 
+![Shipyap catching a false claim: the draft says 9/10, the cited repo line says 3/10.](docs/assets/review-demo.png)
+
+The demo's sample draft. Shipyap blocks a number the repo doesn't support.
+
 Turn your GitHub work into LinkedIn (and X) posts you can back up: with repo citations, nothing
 posted without your approval.
 
 [Try the demo](#try-the-demo) · [Use your own repo](#use-your-own-repo) · [How it works](#how-it-works)
 
 The demo is fictional, offline after installation, and needs no accounts or keys.
-
-<!-- Screenshot placeholder: sample claim, cited lines, and a caught and corrected claim. -->
 
 ## Try the demo
 
