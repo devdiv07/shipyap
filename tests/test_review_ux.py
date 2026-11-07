@@ -23,9 +23,11 @@ from test_review import (
 )
 
 from shipyap.editorial.models import FindingCode
+from shipyap.editorial.supersession import Record
 from shipyap.publication.ledger import Ledger
+from shipyap.review.gate import Gate, Note, SegmentGate
 from shipyap.review.pages import DEMO_GUIDE, StoryView, queue_page, story_page
-from shipyap.review.ux import REASONS, attention_count, status
+from shipyap.review.ux import REASONS, attention_count, flagged, status
 
 
 class Fields(HTMLParser):
@@ -123,7 +125,11 @@ def test_blocked_sentence_has_plain_reason_and_numbered_citations(counted, serve
     code, _, html = client.request("GET", f"/story/{counted.sid}")
     assert code == 200 and "Must fix" in html and "Check this" in html
     assert "A number is missing" in html and "checked against quoted words only" in html
-    assert "<button disabled>Approve</button>" in html
+    assert "<button disabled aria-describedby=approval-blocked-reason>Approve</button>" in html
+    assert (
+        "<div class=approval-blocked><button disabled aria-describedby=approval-blocked-reason>"
+        "Approve</button><p id=approval-blocked-reason>Resolve the Must fix items before approving.</p>"
+    ) in html
     assert (
         html.index("class=post")
         < html.index("class=status")
@@ -142,6 +148,56 @@ def test_details_are_closed_and_no_refresh_or_initial_focus(work, serve):
     assert "<script" not in html and "http-equiv" not in html
     for obsolete in ("review-serve", "--enable-scheduling", "publish-", "story-draft"):
         assert obsolete not in html
+
+
+@pytest.mark.parametrize("evidence", ["available", "missing", "ambiguous"])
+def test_flagged_ranges_render_once_across_source_and_fact_check_refs(evidence):
+    from shipyap.automation.demo import workspace
+
+    with workspace() as demo:
+        item = demo.desk.item(demo.story_id)
+        source = item.current.amap.segments[0]
+        ref = source.source_refs[0]
+        quoted = ref.model_copy(update={"quote": "3/10"})
+        other_quote = ref.model_copy(update={"quote": "<synthetic quote>"})
+        source = source.model_copy(update={"source_refs": (ref, quoted, quoted, other_quote)})
+        amap = item.current.amap.model_copy(update={"segments": (source,)})
+        item = replace(item, current=replace(item.current, amap=amap))
+        note = Note(
+            "FACT_CHECK_UNVERIFIABLE",
+            "Synthetic sample",
+            ("README.md:3", "README.md:3-3", "README.md:3-5", "OTHER.md:3-3"),
+        )
+        gate = Gate((SegmentGate(source.id, warnings=(note,)),))
+        records = demo.desk.records(item.current.brief) if evidence != "missing" else ()
+        if evidence == "ambiguous":
+            records += (Record("README.md", ("Different synthetic source",)),)
+        html = flagged(item, gate, records)
+        assert html.count("README.md:3-3") == 1
+        assert "README.md:3</p>" not in html
+        assert html.count("README.md:3-5") == html.count("OTHER.md:3-3") == 1
+        assert html.count("<q>3/10</q>") == 1
+        assert html.count("<q>&lt;synthetic quote&gt;</q>") == 1
+        assert "quoted words only and the whole cited range" in html or (
+            "the whole cited range and quoted words only" in html
+        )
+        assert "<synthetic quote>" not in html
+
+
+@pytest.mark.parametrize("severity", ["blocking", "warning", "mixed"])
+def test_flagged_sentence_and_whole_post_keep_visible_severity(work, severity):
+    note = Note("NUMBER_NOT_IN_EVIDENCE", "Synthetic sample")
+    blocks = (note,) if severity != "warning" else ()
+    warnings = (note,) if severity != "blocking" else ()
+    item = work.desk().item(work.sid)
+    gate = Gate((SegmentGate("S01", blocks, warnings),), blocks, warnings)
+    html = flagged(item, gate)
+    expected = "check-this" if severity == "warning" else "must-fix"
+    assert html.count(f"data-severity={expected}") == 2
+    if blocks:
+        assert html.count("<strong class=must-fix>Must fix</strong>") == 2
+    if warnings:
+        assert html.count("<strong class=check-this>Check this</strong>") == 2
 
 
 def test_edit_and_reject_errors_keep_inputs_open_and_targeted(work, serve):

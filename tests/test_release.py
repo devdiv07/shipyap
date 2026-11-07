@@ -1,4 +1,4 @@
-"""v0.1.4 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
+"""v0.1.5 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
 
 Offline: reads pyproject.toml and renders pages in memory; nothing is installed or served.
 """
@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 
-def test_the_release_version_is_0_1_4():
-    assert PROJECT["version"] == "0.1.4"
+def test_the_release_version_is_0_1_5():
+    assert PROJECT["version"] == "0.1.5"
 
 
 def test_readme_has_project_badges_and_keeps_the_screenshot_placeholder():
@@ -33,7 +33,7 @@ def test_readme_has_project_badges_and_keeps_the_screenshot_placeholder():
 
 def test_post_text_uses_proportional_font_while_source_pre_keeps_monospace():
     html = layout("Review", "")
-    assert ".post pre { font:17px/1.65 system-ui, sans-serif; max-width:65ch" in html
+    assert ".post pre { font:17px/1.65 system-ui, sans-serif; margin:0;" in html
     assert "pre { white-space: pre-wrap;" in html
     assert "font: 14px/1.5 ui-monospace,\n  monospace;" in html
 

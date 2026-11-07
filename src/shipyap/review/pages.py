@@ -122,10 +122,10 @@ NOT_CANCELLED = (
 )
 
 _CSS = """
-:root { --fg:#1d1d1f; --muted:#5f6368; --bg:#ffffff; --panel:#f5f6f8; --line:#d9dce1;
+:root { --fg:#1d1d1f; --muted:#4b5056; --bg:#ffffff; --panel:#f5f6f8; --line:#d9dce1;
   --bad:#b3261e; --warn:#8a5a00; --ok:#1e6b35; --accent:#2b4fc7; }
 * { box-sizing: border-box; }
-body { margin:0; font:15px/1.5 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+body { margin:0; font:16px/1.6 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
 main { max-width: 980px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 22px; margin: 8px 0 4px; } h2 { font-size: 17px; margin: 24px 0 8px; }
 .notice { background:#fff7e0; border:1px solid #e6c870; padding:8px 12px; border-radius:6px; }
@@ -134,13 +134,17 @@ h1 { font-size: 22px; margin: 8px 0 4px; } h2 { font-size: 17px; margin: 24px 0 
 .panel { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px; }
 details { margin:12px 0; } summary { cursor:pointer; font-weight:600; }
 .status { font-weight:600; } .flagged { margin:12px 0; } :target { scroll-margin-top:16px; }
+.flagged[data-severity=must-fix] { border-left:4px solid var(--bad); }
+.flagged[data-severity=check-this] { border-left:4px solid var(--warn); }
+.must-fix { color:var(--bad); } .check-this { color:var(--warn); }
 blockquote { margin:0 0 8px; }
 pre { white-space: pre-wrap; word-break: break-word; margin:0; font: 14px/1.5 ui-monospace,
   monospace; }
-.post { background:#fff; border:1px solid var(--line); padding:12px; border-radius:6px; }
-.post pre { font:17px/1.65 system-ui, sans-serif; max-width:65ch; margin:0 auto;
+.post { background:#fff; border:1px solid var(--line); max-width:78ch;
+  padding:16px; border-radius:6px; }
+.post pre { font:17px/1.65 system-ui, sans-serif; margin:0;
   word-break:normal; overflow-wrap:anywhere; }
-.claim-evidence { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.claim-evidence { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; }
 @media (max-width:700px) { .claim-evidence { grid-template-columns:1fr; } }
 .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:13px;
   border:1px solid var(--line); background:#fff; }
@@ -151,6 +155,9 @@ table { border-collapse: collapse; width: 100%; } td, th { text-align:left; vert
 textarea, input[type=text] { width:100%; font: 14px/1.4 ui-monospace, monospace; padding:6px; }
 textarea { min-height: 3.2em; }
 button { font-size:14px; padding:6px 14px; margin: 6px 6px 0 0; cursor:pointer; }
+button:disabled { background:#e2e5e9; color:#53575d; border:1px solid #bcc2cb;
+  opacity:1; cursor:not-allowed; }
+.approval-blocked { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
 .muted { color: var(--muted); font-size: 13px; }
 a { color: var(--accent); }
 """
@@ -738,7 +745,11 @@ def _approve_section(item, token, view, defaults=None, gate=None) -> str:
     if item.repost_ready and item.intent is None:
         return "<p>A typed repost approval is recorded for this exact post. Send it below.</p>"
     if item.stale or (gate is not None and not gate.approvable):
-        return f"<button disabled>{label}</button><p>Fix the Must fix items before {label.lower()}.</p>"
+        return (
+            "<div class=approval-blocked>"
+            f"<button disabled aria-describedby=approval-blocked-reason>{label}</button>"
+            "<p id=approval-blocked-reason>Resolve the Must fix items before approving.</p></div>"
+        )
 
     if view.sheet is not None and view.confirmation is not None:
         sheet = view.sheet

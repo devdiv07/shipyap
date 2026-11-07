@@ -125,8 +125,13 @@ def test_forged_http_schedule_is_denied_after_approval_with_buffer_env_set(monke
                 main = page.split("<details id=details")[0]
                 assert demo.example.original in main and "Must fix" in main
                 assert "README.md:3-3" in main and "3/10" in main
+                assert main.count("README.md:3-3") == 1
+                assert "data-severity=must-fix" in main
                 assert "A number is missing" in main
-                assert "<button disabled>Approve</button>" in main
+                assert (
+                    "<button disabled aria-describedby=approval-blocked-reason>Approve</button>"
+                    in main
+                )
                 assert main.index("id=approve") < main.index("id=fix")
                 assert "NUMBER_NOT_IN_EVIDENCE" not in main
                 assert "review-serve" not in page and "--enable-scheduling" not in page
@@ -150,7 +155,11 @@ def test_forged_http_schedule_is_denied_after_approval_with_buffer_env_set(monke
                 assert "<details id=details><summary>Details</summary>" in corrected
                 corrected_main = corrected.split("<details id=details")[0]
                 assert "Recheck passed" in corrected_main and "0 Must fix items" in corrected_main
-                assert "<button disabled>Approve</button>" not in corrected_main
+                assert "data-severity=check-this" in corrected_main
+                assert (
+                    "<button disabled aria-describedby=approval-blocked-reason>Approve</button>"
+                    not in corrected_main
+                )
                 assert ">Approve</button>" in corrected_main
                 assert ">Fix it and recheck</button>" not in corrected_main
                 assert "SYNTHETIC SAMPLE DATA" in corrected_main
@@ -198,7 +207,7 @@ def test_demo_fix_does_not_replace_a_custom_edit_or_hide_a_remaining_error():
         )
         assert "8/10" in html and "Must fix" in html
         assert ">Fix it and recheck</button>" not in html and "Recheck passed" not in html
-        assert "<button disabled>Approve</button>" in html
+        assert "<button disabled aria-describedby=approval-blocked-reason>Approve</button>" in html
 
 
 def test_demo_fix_preserves_unsaved_preview_and_stop_messages():

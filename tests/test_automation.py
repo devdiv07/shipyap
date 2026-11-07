@@ -1107,8 +1107,13 @@ def test_the_fact_check_reads_every_file_and_flags_outdated_sentences(work):
     shutil.rmtree(repair.record_dir(cfg.drafts, sid))
     item = desk.item(sid)
     page = story_page(item, "t", StoryView(), None, fact_check=saved)
-    assert "OUTDATED" in page and "<button disabled>Approve</button>" in page
-    assert page.index('class="panel flagged"') < page.index("<button disabled>Approve</button>")
+    assert (
+        "OUTDATED" in page
+        and "<button disabled aria-describedby=approval-blocked-reason>Approve</button>" in page
+    )
+    assert page.index('class="panel flagged"') < page.index(
+        "<button disabled aria-describedby=approval-blocked-reason>Approve</button>"
+    )
     assert page.index("<h2>Fact check</h2>") > page.index("<summary>Details</summary>")
     # A second run does not check the same story again.
     execute(cfg, model=model, allow_paid=True)

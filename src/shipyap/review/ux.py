@@ -117,17 +117,27 @@ def flagged(item: ReviewItem, gate: Gate, records=()) -> str:
             continue
         source = checked[segment.segment_id]
         lines = []
+        ranges = {}
         for ref in source.source_refs:
+            ranges.setdefault((ref.path, ref.line_start, ref.line_end), []).append(ref)
+        seen_ranges = set(ranges)
+        for refs in ranges.values():
+            ref = refs[0]
             excerpt = "\n".join(
                 f"{ref.line_start + index}: {line}" for index, line in enumerate(ref.excerpt)
             )
-            scope = "quoted words only" if ref.quote is not None else "the whole cited range"
+            scope = " and ".join(
+                dict.fromkeys(
+                    "quoted words only" if r.quote is not None else "the whole cited range"
+                    for r in refs
+                )
+            )
             lines.append(
                 f"<p>{escape(ref.path)}:{ref.line_start}-{ref.line_end} · checked against {scope}</p>"
                 f"<pre>{escape(excerpt or 'Cited evidence unavailable.')}</pre>"
             )
-            if ref.quote is not None:
-                lines.append(f"<p>Checked quote: <q>{escape(ref.quote)}</q></p>")
+            for quote in dict.fromkeys(r.quote for r in refs if r.quote is not None):
+                lines.append(f"<p>Checked quote: <q>{escape(quote)}</q></p>")
         for author in source.author_refs:
             lines.append(
                 f"<p>Your statement: {escape(author.text or 'Statement unavailable.')}</p>"
@@ -136,39 +146,48 @@ def flagged(item: ReviewItem, gate: Gate, records=()) -> str:
         for ref in refs:
             match = re.fullmatch(r"(.+?):(\d+)(?:-(\d+))?", ref)
             path = match[1] if match else ref
+            start = int(match[2]) if match else 1
+            end = int(match[3] or match[2]) if match else None
             candidates = {tuple(record.lines) for record in records if record.path == path}
             if len(candidates) == 1:
                 content = candidates.pop()
-                start = int(match[2]) if match else 1
-                end = int(match[3] or match[2]) if match else min(len(content), 20)
+                end = end if end is not None else min(len(content), 20)
                 selected = content[start - 1 : end] if 1 <= start <= end <= len(content) else ()
                 text = "\n".join(f"{start + i}: {line}" for i, line in enumerate(selected))
                 label = ref if match else f"{ref} (record excerpt, first {end} lines)"
             else:
                 label, text = ref, "Related evidence unavailable or ambiguous."
+            key = (path, start, end)
+            if key in seen_ranges:
+                continue
+            seen_ranges.add(key)
             lines.append(
                 f"<p>{escape(label)}</p><pre>{escape(text or 'Evidence unavailable.')}</pre>"
             )
-        reasons = _reasons(segment.blocks, "Must fix") + _reasons(segment.warnings, "Check this")
+        severity = "must-fix" if segment.blocks else "check-this"
+        reasons = _reasons(segment.blocks, "Must fix", "must-fix") + _reasons(
+            segment.warnings, "Check this", "check-this"
+        )
         cards.append(
-            f'<article class="panel flagged" id="flag-{escape(segment.segment_id)}">'
+            f'<article class="panel flagged" data-severity={severity} id="flag-{escape(segment.segment_id)}">'
             f'<div class="claim-evidence"><div><blockquote>{escape(source.text)}</blockquote>{reasons}</div><div>'
             + ("".join(lines) or "<p>No cited evidence is available for this sentence.</p>")
             + "</div></div></article>"
         )
     if gate.document_blocks or gate.document_warnings:
+        severity = "must-fix" if gate.document_blocks else "check-this"
         cards.append(
-            '<article class="panel flagged"><h2>Whole post</h2>'
-            + _reasons(gate.document_blocks, "Must fix")
-            + _reasons(gate.document_warnings, "Check this")
+            f'<article class="panel flagged" data-severity={severity}><h2>Whole post</h2>'
+            + _reasons(gate.document_blocks, "Must fix", "must-fix")
+            + _reasons(gate.document_warnings, "Check this", "check-this")
             + "</article>"
         )
     return "".join(cards)
 
 
-def _reasons(notes, label):
+def _reasons(notes, label, severity):
     return "".join(
-        f"<p><strong>{label}</strong> — "
+        f"<p><strong class={severity}>{label}</strong> — "
         f"{escape(REASONS.get(n.code, 'Read this finding and its evidence in Details.'))}</p>"
         for n in notes
     )

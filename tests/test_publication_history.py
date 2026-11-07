@@ -279,7 +279,8 @@ def test_published_status_survives_later_decisions_and_hides_ordinary_actions(
         assert ("Published " if state == S.SENT else "Scheduled ") in html
         assert (
             "<button>Approve</button>" not in html
-            and "<button disabled>Approve</button>" not in html
+            and "<button disabled aria-describedby=approval-blocked-reason>Approve</button>"
+            not in html
         )
         assert "<button>Schedule approved post</button>" not in html
 

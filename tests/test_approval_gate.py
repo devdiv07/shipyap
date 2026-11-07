@@ -88,7 +88,7 @@ def test_a_sentence_repeating_a_changed_plan_item_blocks_approval_beside_its_rec
     assert any("evidence/DEVIATION_001.md:1" in line for line in raised.value.details)
     page = story_page(item, "t", StoryView(), None, gate=gate)
     assert "BLOCKS OUTDATED" in page and "evidence/DEVIATION_001.md:1" in page
-    assert "<button disabled>Approve</button>" in page
+    assert "<button disabled aria-describedby=approval-blocked-reason>Approve</button>" in page
     assert "A later record supersedes what this sentence says" in page
     assert "Show the approval sheet" not in page
     # Without the later record nothing says the plan changed: the gate cannot block on it.
