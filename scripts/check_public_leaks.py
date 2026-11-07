@@ -2,7 +2,7 @@
 
 The policy itself stays in the dev repository: exporting it would disclose the markers.
 No file is exempt. Only the exact author field/copyright notice and the README's own
-`git clone https://github.com/<owner>/shipyap.git` line may be masked when requested.
+clone command and CI/release badge lines may be masked when requested.
 """
 
 import argparse
@@ -46,12 +46,20 @@ def _mask_author(text: str, relative: str, author: str) -> str:
 
 
 def _mask_clone_url(text: str, relative: str, login: str) -> str:
-    # The public repository's own clone command, as one whole README line, once. Any other
-    # occurrence of the login (another URL, prose, another file) stays visible.
+    # Only these owner-approved project links, each as one whole README line, once.
+    # Any other occurrence of the login stays visible.
     if relative != "README.md":
         return text
-    line = f"git clone https://github.com/{login}/shipyap.git"
-    return re.sub(rf"(?m)^{re.escape(line)}$", "git clone OWNER_REPOSITORY_URL", text, count=1)
+    lines = (
+        f"git clone https://github.com/{login}/shipyap.git",
+        f"[![CI](https://github.com/{login}/shipyap/actions/workflows/ci.yml/badge.svg)]"
+        f"(https://github.com/{login}/shipyap/actions/workflows/ci.yml)",
+        f"[![Release](https://img.shields.io/github/v/release/{login}/shipyap)]"
+        f"(https://github.com/{login}/shipyap/releases/latest)",
+    )
+    for line in lines:
+        text = re.sub(rf"(?m)^{re.escape(line)}$", "OWNER_REPOSITORY_LINK", text, count=1)
+    return text
 
 
 def scan(root: Path, *, allow_project_author: bool = False, policy: Path = POLICY) -> list[str]:

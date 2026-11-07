@@ -224,6 +224,10 @@ class _Handler(BaseHTTPRequestHandler):
             items, refused = self.server.desk.queue()
         except _Failure as exc:
             return self._message(500, "Review unavailable", _describe(exc)[0])
+        if self.server.desk.demo_mode:
+            sample_ids = [i.story.story_id for i in items] + [r.story_id for r in refused]
+            if len(sample_ids) == 1:
+                return self._story(sample_ids[0], StoryView())
         return Page(
             200,
             queue_page(
@@ -274,7 +278,7 @@ class _Handler(BaseHTTPRequestHandler):
                     view = StoryView(error=_describe(exc), focus="edit")
                 self._render(self._story(sid, view, 409))
                 return
-            self._redirect(sid, "edit")
+            self._redirect(sid, "decision" if desk.demo_mode else "edit")
             return
         try:
             preview = desk.preview(desk.item(sid), texts, full)

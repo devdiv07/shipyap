@@ -64,9 +64,10 @@ def workspace() -> Iterator[DemoSession]:
             response = json.loads(path.read_text("utf-8"))
             response["brief_sha256"] = result.brief_sha256
             path.write_text(json.dumps(response), encoding="utf-8")
-        before_path = root / "sample-before"
+        before_path = paths.draft
         before = run_build(snapshot, paths.brief, resources / "before.json", before_path)
-        after = run_build(snapshot, paths.brief, resources / "after.json", paths.draft)
+        after_path = root / "sample-after"
+        after = run_build(snapshot, paths.brief, resources / "after.json", after_path)
         if before.counts.blocking != 1 or after.counts.blocking != 0:
             raise ValueError("demo checks did not produce the expected result")
         before_bundle = verify_bundle(before_path, BundleKind.DRAFT)
@@ -84,7 +85,9 @@ def workspace() -> Iterator[DemoSession]:
             backlog.mark_offered(story.story_id, now)
         brief = parse_brief(checked.files["brief.json"])
         original = parse_response((resources / "before.json").read_bytes())
-        corrected = parse_response(checked.files["response.json"])
+        corrected = parse_response(
+            verify_bundle(after_path, BundleKind.DRAFT).files["response.json"]
+        )
         sample_check = json.loads((resources / "fact-check.json").read_text(encoding="utf-8"))
         if sample_check.get("label") != "SAMPLE fact check (scripted)":
             raise ValueError("demo fact check is not labelled as sample data")
@@ -106,8 +109,8 @@ def workspace() -> Iterator[DemoSession]:
             demo_mode=True,
         )
         gate = desk.gate(desk.item(story.story_id))
-        if not gate.approvable:
-            raise ValueError("corrected sample is not reviewable")
+        if gate.approvable:
+            raise ValueError("original sample did not block approval")
         yield DemoSession(config, desk, story.story_id, example)
 
 

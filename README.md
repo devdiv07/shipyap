@@ -1,5 +1,9 @@
 # Shipyap
 
+[![CI](https://github.com/devdiv07/shipyap/actions/workflows/ci.yml/badge.svg)](https://github.com/devdiv07/shipyap/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/devdiv07/shipyap)](https://github.com/devdiv07/shipyap/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **You ship. It yaps. With receipts.**
 
 Turn your GitHub work into LinkedIn (and X) posts you can back up: with repo citations, nothing
@@ -30,8 +34,12 @@ uv run --locked --no-dev shipyap demo
 ```
 
 The first launch may download locked dependencies. Each launch creates a fresh temporary workspace.
-The example fact check is **scripted sample data**, not a model judgment. Approving the sample is
-safe: demo scheduling is permanently disabled. Ctrl+C stops the page and removes the workspace.
+The original sample says **9/10**, while its cited `README.md:3` says **3/10**. The Must fix card
+shows both and disables Approve. Choose **Fix it and recheck** to apply the scripted 3/10
+correction. The citation checks pass and Approve becomes available for the temporary sample.
+Everything is labelled **SYNTHETIC SAMPLE DATA**. The example fact check is scripted, and the
+edited sentence has no new model fact check. Demo scheduling is permanently disabled.
+Ctrl+C stops the page and removes the workspace.
 
 ## Use your own repo
 

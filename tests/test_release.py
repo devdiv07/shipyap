@@ -1,4 +1,4 @@
-"""v0.1.3 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
+"""v0.1.4 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
 
 Offline: reads pyproject.toml and renders pages in memory; nothing is installed or served.
 """
@@ -15,8 +15,27 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 
-def test_the_release_version_is_0_1_3():
-    assert PROJECT["version"] == "0.1.3"
+def test_the_release_version_is_0_1_4():
+    assert PROJECT["version"] == "0.1.4"
+
+
+def test_readme_has_project_badges_and_keeps_the_screenshot_placeholder():
+    readme = (ROOT / "README.md").read_text("utf-8")
+    badges = readme.split("**You ship.")[0]
+    clone = next(line for line in readme.splitlines() if line.startswith("git clone https://"))
+    repo = clone.removeprefix("git clone https://github.com/").removesuffix(".git")
+    assert badges.startswith("# Shipyap\n\n")
+    assert f"{repo}/actions/workflows/ci.yml/badge.svg" in badges
+    assert f"github/v/release/{repo}" in badges
+    assert "[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)" in badges
+    assert "<!-- Screenshot placeholder:" in readme
+
+
+def test_post_text_uses_proportional_font_while_source_pre_keeps_monospace():
+    html = layout("Review", "")
+    assert ".post pre { font:17px/1.65 system-ui, sans-serif; max-width:65ch" in html
+    assert "pre { white-space: pre-wrap;" in html
+    assert "font: 14px/1.5 ui-monospace,\n  monospace;" in html
 
 
 def test_shipyap_and_the_pros_alias_run_the_same_code():

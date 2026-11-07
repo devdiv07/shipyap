@@ -152,9 +152,9 @@ def flagged(item: ReviewItem, gate: Gate, records=()) -> str:
         reasons = _reasons(segment.blocks, "Must fix") + _reasons(segment.warnings, "Check this")
         cards.append(
             f'<article class="panel flagged" id="flag-{escape(segment.segment_id)}">'
-            f"<blockquote>{escape(source.text)}</blockquote>{reasons}"
+            f'<div class="claim-evidence"><div><blockquote>{escape(source.text)}</blockquote>{reasons}</div><div>'
             + ("".join(lines) or "<p>No cited evidence is available for this sentence.</p>")
-            + "</article>"
+            + "</div></div></article>"
         )
     if gate.document_blocks or gate.document_warnings:
         cards.append(

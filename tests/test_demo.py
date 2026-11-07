@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from test_review import Client
+from test_review_ux import Fields
 
 from shipyap.automation import demo as module
 from shipyap.automation.cli import main
@@ -54,9 +55,22 @@ def test_demo_shows_a_real_mechanical_failure_and_supplied_correction():
         assert demo.example.block == "NUMBER_NOT_IN_EVIDENCE: 9"
         assert demo.example.corrected_blocks == 0
         item = demo.desk.item(demo.story_id)
-        assert demo.desk.gate(item).approvable and item.seq == 0
+        assert not demo.desk.gate(item).approvable and item.seq == 0
+        assert "9/10" in item.current.text
+        _fix(demo)
+        corrected = demo.desk.item(demo.story_id)
+        assert corrected.seq == 1 and demo.desk.gate(corrected).approvable
+        assert corrected.current.amap.counts.blocking == 0
+        assert "9/10" not in corrected.current.text
         assert demo.desk.fact_check(item)["label"] == "SAMPLE fact check (scripted)"
         assert item.state.value == "UNAPPROVED"
+
+
+def _fix(demo):
+    item = demo.desk.item(demo.story_id)
+    texts = {s.id: s.text for s in item.current.response.segments}
+    texts["S01"] = demo.example.corrected
+    demo.desk.save_edit(demo.story_id, texts, item.seq, datetime.now(UTC))
 
 
 def test_demo_refuses_any_injected_scheduler():
@@ -67,18 +81,19 @@ def test_demo_refuses_any_injected_scheduler():
 
 def test_service_refuses_scheduling_even_with_a_factory_and_valid_approval():
     with workspace() as demo:
+        _fix(demo)
         now = datetime.now(UTC)
         due = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         candidate = demo.desk.approval_candidate(demo.story_id, CHANNEL, due, now)
         approval, _ = demo.desk.approve(
-            demo.story_id, CHANNEL, due, confirmation_phrase(candidate.approval_id), 0, now
+            demo.story_id, CHANNEL, due, confirmation_phrase(candidate.approval_id), 1, now
         )
         with pytest.raises(ReviewError) as raised:
             demo.desk.schedule(
                 demo.story_id,
                 approval.approval_id,
                 schedule_phrase(approval.approval_id),
-                1,
+                2,
                 lambda: pytest.fail("provider constructed"),
                 now,
             )
@@ -104,20 +119,51 @@ def test_forged_http_schedule_is_denied_after_approval_with_buffer_env_set(monke
                 client = Client(server)
                 client.sign_in()
                 path = f"/story/{demo.story_id}"
-                status, _, page = client.request("GET", path)
+                status, _, page = client.request("GET", "/")
                 assert status == 200 and "SYNTHETIC SAMPLE DATA" in page
                 assert "SAMPLE fact check (scripted)" in page
-                assert "A claim caught and corrected" in page and "NUMBER_NOT_IN_EVIDENCE" in page
+                main = page.split("<details id=details")[0]
+                assert demo.example.original in main and "Must fix" in main
+                assert "README.md:3-3" in main and "3/10" in main
+                assert "A number is missing" in main
+                assert "<button disabled>Approve</button>" in main
+                assert main.index("id=approve") < main.index("id=fix")
+                assert "NUMBER_NOT_IN_EVIDENCE" not in main
                 assert "review-serve" not in page and "--enable-scheduling" not in page
                 assert "publish-schedule" not in page and "publish-reconcile" not in page
+                assert (
+                    client.post(path + "/sheet", seq="0", channel_id=CHANNEL, due_at=due)[0] == 409
+                )
+                fix = Fields(main.split("<section id=fix>")[1]).values
+                # A forged token and a stale sequence leave the original blocked.
+                assert (
+                    client.post(path + "/edit", **{**fix, "token": "wrong", "action": "save"})[0]
+                    == 403
+                )
+                assert (
+                    client.post(path + "/edit", **{**fix, "seq": "99", "action": "save"})[0] == 409
+                )
+                assert demo.desk.item(demo.story_id).seq == 0
+                code, headers, _ = client.post(path + "/edit", **fix, action="save")
+                assert code == 303 and headers["Location"] == path + "?panel=decision#decision"
+                _, _, corrected = client.request("GET", headers["Location"])
+                assert "<details id=details><summary>Details</summary>" in corrected
+                corrected_main = corrected.split("<details id=details")[0]
+                assert "Recheck passed" in corrected_main and "0 Must fix items" in corrected_main
+                assert "<button disabled>Approve</button>" not in corrected_main
+                assert ">Approve</button>" in corrected_main
+                assert ">Fix it and recheck</button>" not in corrected_main
+                assert "SYNTHETIC SAMPLE DATA" in corrected_main
+                assert "Schedule approved post" not in corrected
+                assert client.post(path + "/edit", **fix, action="save")[0] == 409
                 candidate = demo.desk.approval_candidate(demo.story_id, CHANNEL, due, now)
                 approval, _ = demo.desk.approve(
-                    demo.story_id, CHANNEL, due, confirmation_phrase(candidate.approval_id), 0, now
+                    demo.story_id, CHANNEL, due, confirmation_phrase(candidate.approval_id), 1, now
                 )
                 # A valid session and confirmation cannot override the demo capability.
                 status, _, page = client.post(
                     path + "/schedule",
-                    seq="1",
+                    seq="2",
                     approval_id=approval.approval_id,
                     typed=schedule_phrase(approval.approval_id),
                 )
@@ -130,6 +176,64 @@ def test_forged_http_schedule_is_denied_after_approval_with_buffer_env_set(monke
             finally:
                 server.shutdown()
                 thread.join(timeout=5)
+
+
+def test_demo_fix_does_not_replace_a_custom_edit_or_hide_a_remaining_error():
+    from shipyap.review.pages import StoryView, story_page
+
+    with workspace() as demo:
+        item = demo.desk.item(demo.story_id)
+        texts = {s.id: s.text for s in item.current.response.segments}
+        texts["S01"] = demo.example.corrected.replace("3/10", "8/10")
+        demo.desk.save_edit(demo.story_id, texts, 0, datetime.now(UTC))
+        item = demo.desk.item(demo.story_id)
+        html = story_page(
+            item,
+            "sample-token",
+            StoryView(),
+            None,
+            demo=True,
+            demo_example=demo.example,
+            gate=demo.desk.gate(item),
+        )
+        assert "8/10" in html and "Must fix" in html
+        assert ">Fix it and recheck</button>" not in html and "Recheck passed" not in html
+        assert "<button disabled>Approve</button>" in html
+
+
+def test_demo_fix_preserves_unsaved_preview_and_stop_messages():
+    from shipyap.review.pages import StoryView, story_page
+
+    with workspace() as demo:
+        item = demo.desk.item(demo.story_id)
+        texts = {s.id: s.text for s in item.current.response.segments}
+        texts["S02"] = "Synthetic unsaved custom wording."
+        preview = demo.desk.preview(item, texts)
+        html = story_page(
+            item,
+            "sample-token",
+            StoryView(texts=texts, preview=preview),
+            None,
+            demo=True,
+            demo_example=demo.example,
+            gate=demo.desk.gate(item),
+        )
+        assert "Synthetic unsaved custom wording." in html
+        assert ">Fix it and recheck</button>" not in html and "Recheck passed" not in html
+        assert demo.desk.item(demo.story_id).seq == 0
+        _fix(demo)
+        item = demo.desk.item(demo.story_id)
+        stopped = story_page(
+            item,
+            "sample-token",
+            StoryView(),
+            None,
+            demo=True,
+            stopped=True,
+            demo_example=demo.example,
+            gate=demo.desk.gate(item),
+        )
+        assert "STOPPED" in stopped and "Approve is now available" not in stopped
 
 
 def test_normal_review_cannot_enable_scheduling_for_a_demo_workspace():

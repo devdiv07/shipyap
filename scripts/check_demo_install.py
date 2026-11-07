@@ -8,6 +8,7 @@ import argparse
 import importlib.util
 import sys
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -68,9 +69,17 @@ def main() -> int:
         assert server.demo_example.corrected_blocks == 0
         assert "9/10" in server.demo_example.original and "3/10" in server.demo_example.corrected
         items, refused = desk.queue()
-        assert not refused and len(items) == 1 and items[0].state.value == "UNAPPROVED"
-        assert desk.fact_check(items[0])["label"] == "SAMPLE fact check (scripted)"
-        assert desk.gate(items[0]).approvable
+        assert not items and len(refused) == 1 and refused[0].reason.value == "HELD_BACK"
+        item = desk.item(refused[0].story_id)
+        assert item.state.value == "UNAPPROVED"
+        assert desk.fact_check(item)["label"] == "SAMPLE fact check (scripted)"
+        assert not desk.gate(item).approvable and "9/10" in item.current.text
+        texts = {s.id: s.text for s in item.current.response.segments}
+        texts["S01"] = server.demo_example.corrected
+        desk.save_edit(item.story.story_id, texts, 0, datetime.now(UTC))
+        assert desk.gate(desk.item(item.story.story_id)).approvable
+        items, refused = desk.queue()
+        assert len(items) == 1 and not refused
         roots.append(desk.drafts.parent)
         raise KeyboardInterrupt
 

@@ -138,6 +138,10 @@ blockquote { margin:0 0 8px; }
 pre { white-space: pre-wrap; word-break: break-word; margin:0; font: 14px/1.5 ui-monospace,
   monospace; }
 .post { background:#fff; border:1px solid var(--line); padding:12px; border-radius:6px; }
+.post pre { font:17px/1.65 system-ui, sans-serif; max-width:65ch; margin:0 auto;
+  word-break:normal; overflow-wrap:anywhere; }
+.claim-evidence { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:700px) { .claim-evidence { grid-template-columns:1fr; } }
 .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:13px;
   border:1px solid var(--line); background:#fff; }
 .UNAPPROVED { color:var(--warn); } .APPROVED { color:var(--ok); } .REJECTED { color:var(--bad); }
@@ -163,7 +167,8 @@ def e(value: object) -> str:
 
 
 DEMO_GUIDE = (
-    "This is a sample draft. 1) Read the post. 2) Look at what's flagged. 3) Approve or reject."
+    "SYNTHETIC SAMPLE DATA. Read the original draft and its Must fix card. "
+    "Choose Fix it and recheck to try the supplied correction, then review it for approval."
 )
 
 PRODUCT_NAME = "Shipyap"
@@ -342,6 +347,8 @@ def story_page(
         if not stopped:
             parts.append(_approve_section(item, token, view, defaults, gate))
         parts.append("</section>")
+        if demo and demo_example is not None and not stopped and not unsaved:
+            parts.append(_demo_fix(item, token, demo_example, gate))
         if item.state != ReviewState.REJECTED:
             parts.append(_reject_section(item, token, view))
     if (
@@ -382,14 +389,6 @@ def story_page(
         parts.append("<p>edited by owner</p>")
     if item.stale:
         parts.append(f"<p>{e(STALE_MESSAGE)}</p>")
-    if demo and demo_example is not None:
-        example = demo_example
-        parts.append(
-            "<h2>A claim caught and corrected</h2><p>Prepared sample correction; no model or owner decision is implied.</p>"
-            f"<p>Original: {e(example.original)}</p><pre>{e(example.evidence)}</pre>"
-            f"<p>{e(example.block)}</p><p>Supplied correction: {e(example.corrected)}</p>"
-            f"<p>Rechecked with the same rules: {example.corrected_blocks} blocking findings.</p>"
-        )
     parts.extend(
         [
             _story_section(item),
@@ -419,6 +418,33 @@ def story_page(
 
 
 # --- sections ----------------------------------------------------------------------------------
+
+
+def _demo_fix(item: ReviewItem, token: str, example: DemoExample, gate: Gate) -> str:
+    if item.state != ReviewState.UNAPPROVED:
+        return ""
+    first = item.current.response.segments[0]
+    if first.text == example.corrected and gate.approvable:
+        return (
+            "<section id=fix><h2>Recheck passed</h2><p class=done>"
+            "0 Must fix items. The corrected 3/10 sentence passes the citation checks. "
+            "Approve is now available.</p><p>SYNTHETIC SAMPLE DATA. "
+            "The edited sentence has no new model fact check. Read its cited evidence.</p></section>"
+        )
+    if first.text != example.original:
+        return ""
+    fields = "".join(
+        f'<input type=hidden name="seg-{e(segment.id)}" value={_q(example.corrected if segment.id == first.id else segment.text)}>'
+        for segment in item.current.response.segments
+    )
+    return (
+        "<section id=fix><h2>Fix it</h2><p>SYNTHETIC SAMPLE DATA. "
+        "The cited line says 3/10. Apply this scripted correction and rerun the same checks.</p>"
+        f"<blockquote>{e(example.corrected)}</blockquote>"
+        f"<form method=post action=/story/{e(item.story.story_id)}/edit#fix>"
+        f"{_hidden(token, item.seq)}{fields}"
+        "<button name=action value=save>Fix it and recheck</button></form></section>"
+    )
 
 
 def _stop_banner(stopped: bool) -> str:
