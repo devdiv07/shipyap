@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in Shipyap or its demo does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste API keys, Buffer channel ids, private drafts or personal paths.
+        For a security problem, use the private route in SECURITY.md instead of an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, including the exact error code or message.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands you ran, in order. The offline demo is the easiest place to reproduce.
+      placeholder: |
+        1. uv run --locked --no-dev shipyap demo
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Shipyap version
+      description: The `version` in pyproject.toml, or the release tag you cloned.
+      placeholder: "0.1.6"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS, Python and uv versions
+      placeholder: "Windows 11, Python 3.12.8, uv 0.10.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: paid
+    attributes:
+      label: Did this involve a paid run (--allow-paid) or Buffer?
+      options:
+        - "No: offline only (demo, eval, tests, init, repo)"
+        - "Yes: a paid run"
+        - "Yes: Buffer scheduling"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Relevant terminal output, with any keys, ids and private text removed.
+      render: text

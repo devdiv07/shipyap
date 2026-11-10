@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a change to how Shipyap finds, drafts, checks or schedules posts.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Shipyap is a small single-owner tool. Requests that keep the owner's review before every
+        post, keep tests offline and fit docs/architecture.md are the easiest to accept.
+        Multiple users, a hosted service and publishing without review are not planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should happen instead. Name the command, page or file if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Cost and safety impact
+      description: Does it add model calls, network access, credentials or publishing steps?
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to open a pull request for this (see CONTRIBUTING.md).

@@ -1480,7 +1480,7 @@
     ["tests.test_release", "test_review_and_demo_page_titles_say_shipyap[review]"],
     ["tests.test_release", "test_shipyap_and_the_pros_alias_run_the_same_code"],
     ["tests.test_release", "test_the_distribution_and_package_are_named_shipyap"],
-    ["tests.test_release", "test_the_release_version_is_0_1_5"],
+    ["tests.test_release", "test_the_release_version_is_0_1_6"],
     ["tests.test_repaired_factcheck", "test_a_changed_reference_stays_blocked_even_with_the_same_words"],
     ["tests.test_repaired_factcheck", "test_a_dropped_sentence_nobody_recorded_stays_blocked"],
     ["tests.test_repaired_factcheck", "test_a_dropped_tool_text_sentence_is_explained_and_an_unrecorded_drop_is_not"],

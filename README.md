@@ -15,6 +15,10 @@ posted without your approval.
 
 [Try the demo](#try-the-demo) · [Use your own repo](#use-your-own-repo) · [How it works](#how-it-works)
 
+- **[Try it free](#try-the-demo)**: offline demo, no keys, no account.
+- **[Use it on your repos](#use-your-own-repo)**: needs an Anthropic API key; measured about
+  $0.15 per draft, with weekly caps ([costs and limits](#costs-and-limits)).
+
 The demo is fictional, offline after installation, and needs no accounts or keys.
 
 ## Try the demo
