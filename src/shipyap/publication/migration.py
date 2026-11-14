@@ -8,6 +8,7 @@ import hashlib
 import json
 import sqlite3
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from shipyap.publication.approval import approval_id, text_sha256
@@ -193,6 +194,40 @@ def _report(db: sqlite3.Connection) -> dict:
         unresolved_approvals=sorted(unresolved),
         posts=records,
     )
+
+
+def backup_path(path: Path, now: datetime) -> Path:
+    return path.with_name(f"{path.stem}.backup-{now.strftime('%Y%m%dT%H%M%SZ')}{path.suffix}")
+
+
+def apply_with_backup(path: Path, drafts: Path | None = None, now: datetime | None = None) -> dict:
+    """Copy the ledger to a new file beside it, check the copy, then migrate the original. An
+    existing backup name is never overwritten; any failure before the upgrade leaves the
+    ledger unchanged."""
+    if not path.is_file():
+        raise PublicationError(E.LEDGER_UNUSABLE)
+    backup = backup_path(path, now or datetime.now(UTC))
+    try:
+        backup.open("xb").close()  # claims the name; refuses one that exists
+    except OSError:
+        raise PublicationError(E.LEDGER_UNUSABLE) from None
+    copy_database(path, backup)
+    original = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+    copy = sqlite3.connect(backup.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        same = (
+            original.execute("PRAGMA user_version").fetchone()
+            == copy.execute("PRAGMA user_version").fetchone()
+            and _application_objects(original) == _application_objects(copy)
+            and copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        )
+    finally:
+        original.close()
+        copy.close()
+    if not same:
+        raise PublicationError(E.LEDGER_UNUSABLE)
+    report = migrate(path, drafts)
+    return {"mode": "applied", "backup": str(backup), **report}
 
 
 def preview(path: Path, drafts: Path | None = None) -> dict:

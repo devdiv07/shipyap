@@ -94,5 +94,6 @@ Everything is in the workspace folder chosen at `init` (paths set in `pros.toml`
 | `automation/fact-checks/` | fact-check verdicts, one JSON file per story |
 
 The ledger is append-only for approvals and intents. An older ledger is upgraded only by
-`shipyap publication migrate --apply`; without `--apply` it previews a copy. `workspace_id` is a
+`shipyap publication migrate --config <pros.toml> --apply`, which backs the ledger up beside it
+first; without `--apply` it previews a copy. `pros review` on an older ledger prints both commands. `workspace_id` is a
 label, not access control.

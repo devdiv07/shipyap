@@ -1,6 +1,7 @@
 """After each run: read back every scheduled post that is not finished, so the owner hears
 when one went live or failed. Read-only (the publisher's `reconcile`): it never sends, edits
-or resends anything. Needs only PROS_BUFFER_API_KEY; without it, nothing is checked."""
+or resends anything. Needs only PROS_BUFFER_API_KEY; without it, nothing is checked. A workspace
+with no Buffer channel in pros.toml schedules nothing, so it is not checked either."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,9 +17,12 @@ _TELL = {
 }
 
 
-def check_posted(ledger_path: Path, now: datetime | None = None) -> list[str]:
-    """One message per post whose state changed to something the owner must hear about."""
-    if not ledger_path.is_file():
+def check_posted(
+    ledger_path: Path, now: datetime | None = None, *, channels: tuple[str, ...]
+) -> list[str]:
+    """One message per post whose state changed to something the owner must hear about.
+    `channels`: the configured Buffer channel ids (LinkedIn, X); all empty skips the check."""
+    if not any(channels) or not ledger_path.is_file():
         return []
     from shipyap.publication import buffer
     from shipyap.publication.service import reconcile
@@ -37,6 +41,8 @@ def check_posted(ledger_path: Path, now: datetime | None = None) -> list[str]:
                 approval = ledger.get_approval(item.approval_id)
                 snippet = (approval.text if approval else "").replace("\n", " ")[:60]
                 messages.append(f"{_TELL[item.after]} {snippet}")
-    except PublicationError:
-        return ["Could not read post status from Buffer this time; nothing was resent"]
+    except PublicationError as exc:
+        return [
+            f"Could not read post status from Buffer this time ({exc.code}); nothing was resent"
+        ]
     return messages

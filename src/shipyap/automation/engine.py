@@ -11,7 +11,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
 from shipyap.automation import factcheck, repair
@@ -44,7 +44,7 @@ from shipyap.drafting.story_service import (
 )
 from shipyap.editorial.errors import EditorialError
 from shipyap.editorial.inputs import parse_response
-from shipyap.editorial.models import MAX_SEGMENT_CHARS, MAX_SEGMENTS, DraftStatus
+from shipyap.editorial.models import MAX_POST_CHARS, MAX_SEGMENTS, DraftStatus
 from shipyap.editorial.service import build_from_response, prepare_build
 from shipyap.editorial.sources import load_verified_snapshot
 from shipyap.editorial.supersession import Record
@@ -84,8 +84,29 @@ def _code(error: Exception, *, drafted: bool = False) -> str:
     if isinstance(error, DraftingError):
         if error.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
             return f"{error.code}: {error.owner_message(drafted=drafted)}{error.detail()}"
+        if error.code == DraftingErrorCode.BUDGET_EXCEEDED:
+            return f"{error.code}{error.detail()}: {_RAISE_CAP}"
         return f"{error.code}{error.detail()}"
     return str(error.code) if hasattr(error, "code") else "LOCAL_IO_FAILED"
+
+
+_RAISE_CAP = "this run's model calls would go over max_cost_usd; raise max_cost_usd in pros.toml"
+
+# The fact check's draft segments are the post, which the checker caps at MAX_POST_CHARS. A
+# JSON-escaped code point takes at most six bytes; reserve one token per byte, plus framing for
+# every allowed segment's identifier. A longer draft is blocked anyway, and the provider's real
+# count is checked against this hold before the fact-check request is sent.
+FACT_CHECK_SEGMENT_TOKENS = MAX_POST_CHARS * 6 + MAX_SEGMENTS * 64
+
+
+def budget_refusal(required: Decimal, spent: Decimal, cap: Decimal) -> str:
+    """The plain-words refusal: what was needed, what was left, and the pros.toml key to raise."""
+    suggested = ((spent + required) * 20).to_integral_value(ROUND_CEILING) / 20
+    return (
+        f"DRAFT_AND_FACT_CHECK_BUDGET_EXCEEDED: need ${required:.4f}, remaining "
+        f"${cap - spent:.4f} of max_cost_usd ${cap} for this run; no draft call made. "
+        f"Raise max_cost_usd in pros.toml to at least '{suggested:.2f}' to allow it"
+    )
 
 
 def request_hash(request: ModelRequest) -> str:
@@ -228,22 +249,14 @@ class _Budget:
         if self.kind == "draft" and self.draft_snapshot is not None:
             check = factcheck.build_request(request.model, self.draft_snapshot, [])
             base_tokens = self._call("count_input_tokens", check)
-            # A JSON-escaped code point takes at most six bytes; reserve one token per byte,
-            # with space for every allowed segment's identifier and framing. The real provider
-            # count is checked against this hold before the fact-check request is sent.
-            segment_envelope = MAX_SEGMENTS * (MAX_SEGMENT_CHARS * 6 + 64)
             self.fact_check_hold = counted_estimate(
-                request.model, base_tokens + segment_envelope, check.max_tokens
+                request.model, base_tokens + FACT_CHECK_SEGMENT_TOKENS, check.max_tokens
             ).max_cost_usd
             draft_cost = counted_estimate(request.model, tokens, request.max_tokens).max_cost_usd
             if self.result.estimated_usd + draft_cost + self.fact_check_hold > self.cap:
                 required = draft_cost + self.fact_check_hold
-                remaining = self.cap - self.result.estimated_usd
                 self.fact_check_hold = Decimal(0)
-                raise AutomationError(
-                    f"DRAFT_AND_FACT_CHECK_BUDGET_EXCEEDED: need ${required:.4f}, "
-                    f"remaining ${remaining:.4f}; no draft call made"
-                )
+                raise AutomationError(budget_refusal(required, self.result.estimated_usd, self.cap))
         if self.kind == "fact_check" and self.fact_check_hold:
             actual = counted_estimate(request.model, tokens, request.max_tokens).max_cost_usd
             if actual > self.fact_check_hold:

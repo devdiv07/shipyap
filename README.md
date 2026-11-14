@@ -116,9 +116,12 @@ be approved. A completed check can still miss mistakes; read the source yourself
 
 ## Costs and limits
 
-Measured usage has been about **$0.15–$0.20 per draft at list price**. Costs vary with the model,
+Measured usage has been about **$0.15–$0.20 per draft at list price** (draft plus fact check
+about $0.14 in the latest trial). Costs vary with the model,
 repository size and discovery work, and provider prices or billing can differ. `max_cost_usd` is
-the estimated reservation ceiling for each run; `weekly_draft_cap` limits draft attempts per week.
+the estimated reservation ceiling for each run (the default `'1.00'` covers discovery, one draft
+and its fact check); `weekly_draft_cap` limits draft attempts per week. A run that would go over
+it makes no call and says to raise `max_cost_usd` in `pros.toml`.
 Reservations are estimates, not provider billing guarantees. Set a provider-side spending limit too.
 If drafting fails with a usage-limit message, raise the monthly limit in the Anthropic Console.
 

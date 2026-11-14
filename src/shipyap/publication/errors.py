@@ -54,7 +54,7 @@ class PublicationErrorCode(StrEnum):
 
 
 MESSAGES: dict[PublicationErrorCode, str] = {
-    PublicationErrorCode.LEDGER_MIGRATION_REQUIRED: "publication history needs an explicit offline migration; preview a disposable copy first",
+    PublicationErrorCode.LEDGER_MIGRATION_REQUIRED: "publication history uses an older format; run pros publication migrate --config <your pros.toml> to preview, then add --apply (it backs up the ledger first)",
     PublicationErrorCode.PUBLICATION_IDENTITY_REQUIRED: "publication story identity is missing or ambiguous; scheduling is blocked",
     PublicationErrorCode.STORY_ALREADY_SUBMITTED: "this story already has a submission; only an explicit typed repost can start another publication",
     PublicationErrorCode.NEAR_DUPLICATE_POST: "this text repeats an earlier post; inspect its history and explicitly confirm a repost",

@@ -15,7 +15,7 @@ from shipyap.automation import factcheck
 from shipyap.automation.config import AutomationError, load_config
 from shipyap.automation.engine import STOP_FILE
 from shipyap.automation.slots import describe_local, next_free_slot
-from shipyap.publication.errors import PublicationError
+from shipyap.publication.errors import PublicationError, PublicationErrorCode
 from shipyap.review.pages import STOP_MESSAGE, ApprovalDefaults
 from shipyap.stories.backlog import StoryBacklog
 from shipyap.stories.errors import StoryError
@@ -62,6 +62,16 @@ def waiting(config) -> tuple[str, ...]:
     except (ReviewError, StoryError, PublicationError, OSError, sqlite3.Error):
         return ()
     return tuple(i.story.story_id for i in items if i.state == ReviewState.UNAPPROVED)
+
+
+def migration_hint(config_path: Path) -> str:
+    """The exact commands that upgrade an older workspace's publication history."""
+    command = f'pros publication migrate --config "{config_path.resolve()}"'
+    return (
+        "This workspace's publication history uses an older format. Preview the upgrade on a "
+        f"copy:\n  {command}\nThen apply it (the ledger is backed up first, beside it):\n"
+        f"  {command} --apply"
+    )
 
 
 def serve(config_path: Path, port: int) -> int:
@@ -120,6 +130,8 @@ def serve(config_path: Path, port: int) -> int:
         server = ReviewServer(desk, port, scheduler=scheduler, defaults=defaults, stopped=stopped)
     except (ReviewError, StoryError, PublicationError) as exc:
         print(f"NEEDS_ATTENTION: {exc.code.value}")
+        if exc.code == PublicationErrorCode.LEDGER_MIGRATION_REQUIRED:
+            print(migration_hint(config_path))
         return 2
     except OSError:
         print("NEEDS_ATTENTION: PORT_UNAVAILABLE (is another review page already open?)")

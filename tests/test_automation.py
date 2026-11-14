@@ -9,6 +9,7 @@ import re
 import shutil
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from drafting_fake import model_text, reply
@@ -18,7 +19,7 @@ from stories_fake import HISTORIC_FILES, historic_finding, ref
 
 from shipyap.automation import cli, engine, factcheck, repair, selection
 from shipyap.automation import review as review_page
-from shipyap.automation.config import AutomationError, load_config
+from shipyap.automation.config import AutomationError, Config, load_config
 from shipyap.automation.selection import select_sources
 from shipyap.automation.slots import describe_local, next_free_slot
 from shipyap.automation.state import State, run_lock
@@ -384,6 +385,7 @@ def test_budget_is_cumulative_and_refusal_leaves_draft_retryable(work):
     assert not second.drafts_created and second.statuses[0] == "NEEDS_ATTENTION"
     assert "DRAFT_AND_FACT_CHECK_BUDGET_EXCEEDED" in str(second.failures)
     assert "no draft call made" in str(second.failures) and not model.fact_checks
+    assert "Raise max_cost_usd in pros.toml" in str(second.failures)
     capped = replace(cfg, max_cost_usd="0.01")
     result = execute(capped, Github(SECOND), model, allow_paid=True)
     assert not result.estimated_usd and "BUDGET_EXCEEDED" in str(result.failures)
@@ -647,6 +649,47 @@ max_cost_usd = '1.00'
     (root / "STOP").write_text("", encoding="utf-8")
     assert cli.main(["review", "--config", str(path), "--port", "0"]) == 0
     assert STOP_MESSAGE in capsys.readouterr().out
+
+
+class TrialSizedCounts(Model):
+    """Token counts measured in a real trial workspace (2026-11): discovery 36,550, story draft
+    about 33,000, fact check about 29,000 before the draft's segments."""
+
+    def count_input_tokens(self, request):
+        properties = request.output_schema.get("properties", {})
+        if "verdicts" in properties:
+            return 29_000 + len(request.user_text.split("<<<DRAFT SEGMENTS>>>")[1])
+        self.counts.append(request)
+        return 36_550 if "findings" in properties else 33_045
+
+
+def test_default_cap_affords_discovery_draft_and_fact_check_in_one_run(work):
+    cfg, _ = work
+    assert cfg.max_cost_usd == Config.max_cost_usd == "1.00"  # what pros init writes
+    model = TrialSizedCounts()
+    result = execute(cfg, model=model, allow_paid=True)
+    assert result.drafts_created == 1 and model.fact_checks
+    assert not [f for f in result.failures if "BUDGET" in f]
+    # A trial run that drafted at about $0.14 list price had been refused at $0.94 reserved.
+    assert result.estimated_usd <= Decimal("0.70")
+
+
+def test_fact_check_hold_is_bounded_by_the_post_not_every_segment_slot():
+    hold = counted_estimate("claude-sonnet-5-5", 29_000 + engine.FACT_CHECK_SEGMENT_TOKENS, 4000)
+    assert engine.FACT_CHECK_SEGMENT_TOKENS == 3000 * 6 + 60 * 64
+    assert hold.max_cost_usd < Decimal("0.20")
+
+
+def test_budget_refusal_names_the_pros_toml_key_and_a_value():
+    text = engine.budget_refusal(Decimal("0.4000"), Decimal("0.2243"), Decimal("0.50"))
+    assert "remaining $0.2757 of max_cost_usd $0.50" in text
+    assert "Raise max_cost_usd in pros.toml to at least '0.65'" in text
+    assert "no draft call made" in text
+
+
+def test_budget_exceeded_code_tells_the_owner_what_to_raise():
+    error = DraftingError(DraftingErrorCode.BUDGET_EXCEEDED, phase=Phase.COUNT)
+    assert "raise max_cost_usd in pros.toml" in engine._code(error)
 
 
 def test_unusable_old_snapshot_does_not_block_intact_backlog(work):

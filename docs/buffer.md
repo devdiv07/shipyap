@@ -74,13 +74,17 @@ Version 0.1.3 requires an explicit ledger upgrade. Starting review does not upgr
 Stop the review server and keep the workspace STOP file in place. First run this offline preview:
 
 ```powershell
-shipyap publication migrate --ledger 'C:\work\my-posts\automation\review-ledger.sqlite' --drafts 'C:\work\my-posts\drafts'
+shipyap publication migrate --config 'C:\work\my-posts\pros.toml'
 ```
+
+`--config` finds the workspace's ledger and drafts folder; `--ledger` and `--drafts` still work.
 
 The preview opens the original database read-only and upgrades a temporary copy. It lists every
 earlier submission, identifies legacy duplicates and reports unresolved approvals. It preserves
 the original approval, decision and intent rows. Inspect this result before changing the real ledger;
-back up the workspace, then repeat with `--apply` only when you choose to migrate it. An unresolved
+then repeat with `--apply` only when you choose to migrate it. `--apply` first copies the ledger
+to `review-ledger.backup-<UTC time>.sqlite` beside it, checks the copy, and only then upgrades the
+original; it never overwrites an existing backup. An unresolved
 historical submission blocks all new sends rather than being ignored. No migration contacts Buffer.
 
 ## Earlier posts and intentional reposts

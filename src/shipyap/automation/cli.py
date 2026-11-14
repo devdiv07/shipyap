@@ -284,21 +284,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         "publication", help="preview or explicitly apply offline publication-history migration"
     )
     publication.add_argument("action", choices=("migrate",))
-    publication.add_argument("--ledger", type=Path, required=True)
+    target = publication.add_mutually_exclusive_group(required=True)
+    target.add_argument("--config", type=Path, help="the workspace's pros.toml")
+    target.add_argument("--ledger", type=Path)
     publication.add_argument("--drafts", type=Path)
     publication.add_argument(
         "--apply",
         action="store_true",
-        help="explicitly change this ledger; omit for a disposable-copy preview",
+        help="back up, then change this ledger; omit for a disposable-copy preview",
     )
     args = parser.parse_args(argv)
     if args.command == "publication":
         from shipyap.publication.errors import PublicationError
-        from shipyap.publication.migration import migrate, preview
+        from shipyap.publication.migration import apply_with_backup, preview
 
+        if args.config is not None:
+            from shipyap.automation.config import AutomationError
+
+            try:
+                config = load_config(args.config)
+            except AutomationError as exc:
+                print(f"NEEDS_ATTENTION: {exc}")
+                return 2
+            args.ledger = config.state / REVIEW_LEDGER
+            args.drafts = args.drafts or config.drafts
         try:
             result = (
-                migrate(args.ledger, args.drafts)
+                apply_with_backup(args.ledger, args.drafts)
                 if args.apply
                 else preview(args.ledger, args.drafts)
             )
@@ -351,7 +363,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             _tell(config, result, [])
             print(result.failures[0])
             return 2
-        posted = check_posted(config.state / REVIEW_LEDGER)
+        posted = check_posted(
+            config.state / REVIEW_LEDGER,
+            channels=(config.buffer_channel_id, config.x_channel_id),
+        )
         _tell(config, result, posted)
         print(" / ".join(dict.fromkeys(result.statuses)))
         print(f"Repositories inspected: {result.repositories_inspected}")

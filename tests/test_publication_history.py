@@ -605,3 +605,118 @@ def test_invalid_backfill_link_rolls_back_the_entire_upgrade(tmp_path):
     before = path.read_bytes()
     assert refusal(migrate, path, drafts) == E.PUBLICATION_IDENTITY_REQUIRED
     assert path.read_bytes() == before
+
+
+def workspace_config(tmp_path, channel=""):
+    from shipyap.automation.config import load_config
+
+    path = tmp_path / "pros.toml"
+    path.write_text(
+        f"workspace_root = '{tmp_path}'\nworkspace_id = 'demo_workspace'\n"
+        "preferences = 'preferences.sqlite'\nbacklog = 'backlog.sqlite'\ndrafts = 'drafts'\n"
+        "snapshots = 'snapshots'\nstate = 'automation'\nmax_cost_usd = '1.00'\n"
+        f"buffer_channel_id = '{channel}'\n",
+        encoding="utf-8",
+    )
+    config = load_config(path)
+    config.state.mkdir(parents=True)
+    return path, config
+
+
+def dump(path):
+    db = sqlite3.connect(path)
+    try:
+        return list(db.iterdump()), db.execute("PRAGMA user_version").fetchone()[0]
+    finally:
+        db.close()
+
+
+def test_apply_backs_up_the_ledger_before_upgrading_it(tmp_path):
+    from datetime import UTC, datetime
+
+    from shipyap.publication.migration import apply_with_backup, backup_path
+
+    path = tmp_path / "review-ledger.sqlite"
+    legacy_database(path)
+    before = path.read_bytes()
+    moment = datetime(2026, 11, 15, 10, 0, tzinfo=UTC)
+    report = apply_with_backup(path, None, moment)
+    backup = backup_path(path, moment)
+    assert report["mode"] == "applied" and report["backup"] == str(backup)
+    assert backup.name == "review-ledger.backup-20261115T100000Z.sqlite"
+    db = sqlite3.connect(backup)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+    db.close()
+    assert path.read_bytes() != before
+    Ledger.open(path, create=False).close()  # the upgraded ledger opens
+    # An existing backup name is never overwritten, and then nothing is changed.
+    legacy_database(other := tmp_path / "second.sqlite")
+    taken = backup_path(other, moment)
+    taken.write_bytes(b"keep")
+    untouched = other.read_bytes()
+    assert refusal(apply_with_backup, other, None, moment) == E.LEDGER_UNUSABLE
+    assert taken.read_bytes() == b"keep" and other.read_bytes() == untouched
+
+
+def test_migrate_with_config_previews_then_applies_with_a_backup(tmp_path, capsys):
+    from shipyap.automation.cli import main
+    from shipyap.automation.review import REVIEW_LEDGER
+
+    config_path, config = workspace_config(tmp_path)
+    ledger = config.state / REVIEW_LEDGER
+    legacy_database(ledger)
+    before = ledger.read_bytes()
+    original = dump(ledger)
+    assert main(["publication", "migrate", "--config", str(config_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["mode"] == "disposable-copy"
+    assert ledger.read_bytes() == before
+    assert main(["publication", "migrate", "--config", str(config_path), "--apply"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["mode"] == "applied" and Path(report["backup"]).parent == config.state
+    assert dump(Path(report["backup"])) == original  # every row and schema object, exactly
+    Ledger.open(ledger, create=False).close()
+
+
+def test_review_on_an_older_ledger_names_the_exact_migrate_command(tmp_path, capsys):
+    from shipyap.automation.review import REVIEW_LEDGER, serve
+
+    config_path, config = workspace_config(tmp_path)
+    legacy_database(config.state / REVIEW_LEDGER)
+    assert serve(config_path, 0) == 2
+    out = capsys.readouterr().out
+    command = f'pros publication migrate --config "{config_path.resolve()}"'
+    assert "NEEDS_ATTENTION: LEDGER_MIGRATION_REQUIRED" in out
+    assert f"  {command}\n" in out and f"  {command} --apply" in out
+    assert "backed up first" in out
+
+
+def test_post_status_is_not_read_when_no_buffer_channel_is_configured(tmp_path, monkeypatch):
+    from shipyap.automation.posted import check_posted
+    from shipyap.publication import buffer
+
+    def forbidden():
+        raise AssertionError("Buffer key read without a configured channel")
+
+    monkeypatch.setattr(buffer, "load_api_key", forbidden)
+    ledger = tmp_path / "review-ledger.sqlite"
+    legacy_database(ledger)  # an older ledger used to produce "Could not read post status"
+    assert check_posted(ledger, channels=("", "")) == []
+
+
+def test_post_status_is_still_read_when_a_channel_is_configured(tmp_path, monkeypatch):
+    from shipyap.automation.posted import check_posted
+    from shipyap.publication import buffer
+
+    calls = []
+    monkeypatch.setattr(buffer, "load_api_key", lambda: calls.append("key") or "k")
+    monkeypatch.setattr(buffer, "HttpsBufferTransport", lambda key: None)
+    monkeypatch.setattr(buffer, "BufferPublisher", lambda transport: None)
+    ledger = tmp_path / "review-ledger.sqlite"
+    legacy_database(ledger)
+    for channels in ((CHANNEL, ""), ("", "f1" * 12)):
+        messages = check_posted(ledger, channels=channels)
+        assert messages == [
+            "Could not read post status from Buffer this time (LEDGER_MIGRATION_REQUIRED); "
+            "nothing was resent"
+        ]
+    assert calls == ["key", "key"]
