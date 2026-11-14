@@ -1,4 +1,4 @@
-"""v0.1.6 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
+"""v0.1.7 release identity: version, the `shipyap` command with `pros` as its alias, and page titles.
 
 Offline: reads pyproject.toml and renders pages in memory; nothing is installed or served.
 """
@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 
-def test_the_release_version_is_0_1_6():
-    assert PROJECT["version"] == "0.1.6"
+def test_the_release_version_is_0_1_7():
+    assert PROJECT["version"] == "0.1.7"
 
 
 def test_readme_has_project_badges_and_the_demo_screenshot():

@@ -16,6 +16,7 @@ from shipyap.automation.config import load_config
 from shipyap.automation.engine import _ERRORS, _code, run
 from shipyap.automation.posted import check_posted
 from shipyap.automation.review import REVIEW_LEDGER
+from shipyap.drafting.errors import DraftingErrorCode
 from shipyap.ingestion.github import DEFAULT_LIMITS
 from shipyap.ingestion.transport import HttpsTransport
 from shipyap.preferences.errors import PreferencesError
@@ -68,8 +69,16 @@ def _tell(config, result, posted: list[str]) -> None:
         )
     toasts += [f"Draft shelved (not shown for review)|{line[:200]}" for line in result.shelved]
     toasts += [f"Shipyap|{message}" for message in posted]
-    if result.failures:
-        toasts.append(f"Shipyap needs you|{result.failures[0][:200]}")
+    if result.usage_limit is not None:
+        # Its own toast, in full: the generic one below is cut at 200 characters.
+        drafted = bool(result.drafts_created)
+        toasts.append(
+            "Shipyap: Anthropic usage limit reached"
+            f"|{result.usage_limit.owner_message(drafted=drafted)}"
+        )
+    others = [f for f in result.failures if DraftingErrorCode.PROVIDER_USAGE_LIMIT not in f]
+    if others:
+        toasts.append(f"Shipyap needs you|{others[0][:200]}")
     try:
         (config.workspace_root / "notify.txt").write_text(
             "".join(line.replace("\n", " ") + "\n" for line in toasts), "utf-8"
@@ -222,6 +231,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="OWNER/REPO",
         help="read this repository again with the current evidence selection (needs --allow-paid)",
     )
+    command.add_argument(
+        "--retry-now",
+        action="store_true",
+        help="after raising the Anthropic usage limit, run now instead of waiting for its reset",
+    )
     review = subcommands.add_parser(
         "review", help="open the review page with your saved channel and the next free slot"
     )
@@ -328,6 +342,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             HttpsTransport(DEFAULT_LIMITS),
             allow_paid=args.allow_paid,
             reexamine=tuple(args.reexamine),
+            retry_now=args.retry_now,
         )
         if result.statuses == ["STOPPED"]:
             print("STOPPED: remove the STOP file in your workspace to run again. Nothing was done.")

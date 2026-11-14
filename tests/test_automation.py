@@ -1170,3 +1170,156 @@ def test_absolute_security_claims_are_flagged_and_dated_documents_are_ruled():
     assert absolute_phrases("A stable fingerprint lets a reviewer compare values.") == ()
     assert "pre-registration" in STORY_SYSTEM_PROMPT and "current" in STORY_SYSTEM_PROMPT
     assert "pre-registration" in story_prompt.SYSTEM_PROMPT
+
+
+# Usage limit (stranger test): the account's Anthropic API usage limit is reached. Synthetic
+# error objects in the form provider.py builds them; no network.
+RESET = datetime(2026, 11, 1, tzinfo=UTC)  # the Sunday after NOW, in NOW's ISO week
+AFTER_RESET = datetime(2026, 11, 1, 0, 1, tzinfo=UTC)
+LIMIT_TEXT = (
+    "Your Anthropic API usage limit is reached (resets 2026-11-01 00:00 UTC). Raise it in the "
+    "Anthropic Console or wait. No draft was made and nothing was charged."
+)
+
+
+def _limit(phase, resets_at=RESET):
+    return DraftingError(
+        DraftingErrorCode.PROVIDER_USAGE_LIMIT,
+        phase=phase,
+        request_id="req_011TestRequestId0001",
+        error_type="invalid_request_error",
+        resets_at=resets_at,
+    )
+
+
+class LimitedModel(Model):
+    """Refuses with the usage limit at one point (`count`, `discovery` or `draft`) while
+    `limited` is true; otherwise the ordinary fake."""
+
+    def __init__(self, at, resets_at=RESET):
+        super().__init__()
+        self.at, self.resets_at, self.limited = at, resets_at, True
+
+    def count_input_tokens(self, request):
+        if self.limited and self.at == "count":
+            self.counts.append(request)
+            raise _limit(Phase.COUNT, self.resets_at)
+        return super().count_input_tokens(request)
+
+    def generate(self, request):
+        props = request.output_schema.get("properties", {})
+        kind = "discovery" if "findings" in props else "check" if "verdicts" in props else "draft"
+        if self.limited and self.at == kind:
+            self.generations.append(request)
+            raise _limit(Phase.GENERATE, self.resets_at)
+        return super().generate(request)
+
+
+def _limit_spending(cfg):
+    state = State(cfg.state / "automation.sqlite")
+    try:
+        kinds = [k for (k,) in state.db.execute("SELECT kind FROM spending ORDER BY id")]
+        return kinds, engine._paid_drafts_this_week(state, NOW)
+    finally:
+        state.close()
+
+
+def _notify(cfg):
+    return (cfg.workspace_root / "notify.txt").read_text(encoding="utf-8").splitlines()
+
+
+def test_a_usage_limit_is_reported_in_plain_words_once_and_the_timer_then_waits(work):
+    cfg, _ = work
+    model, github = LimitedModel("count"), Github()
+    first = execute(cfg, github, model, allow_paid=True)
+    assert first.statuses[0] == "USAGE_LIMIT_REACHED" and "NEEDS_ATTENTION" in first.statuses
+    assert first.failures == [
+        f"{REPO}: PROVIDER_USAGE_LIMIT: {LIMIT_TEXT} (phase COUNT, provider type "
+        "invalid_request_error, request id req_011TestRequestId0001)"
+    ]
+    assert len(model.counts) == 1 and not model.generations  # nothing more was sent this run
+    assert _limit_spending(cfg) == ([], 0) and first.estimated_usd == 0
+    cli._tell(cfg, first, [])
+    assert _notify(cfg) == [f"Shipyap: Anthropic usage limit reached|{LIMIT_TEXT}"]
+    assert LIMIT_TEXT in (cfg.workspace_root / "last-run.txt").read_text(encoding="utf-8")
+
+    # The next timer runs before the reset: nothing is read or sent, and no new toast.
+    calls = len(github.calls)
+    held = execute(cfg, github, model, allow_paid=True)
+    assert held.statuses == ["USAGE_LIMIT_WAIT"] and not held.failures
+    assert held.notes == [
+        "draft: the Anthropic API usage limit was reached on 2026-10-29; this run read, sent "
+        "and spent nothing, and paid runs wait until 2026-11-01 00:00 UTC. Raised the limit in "
+        "the Anthropic Console already? Run pros run with --allow-paid --retry-now"
+    ]
+    assert len(github.calls) == calls and len(model.counts) == 1
+    cli._tell(cfg, held, [])
+    assert _notify(cfg) == []
+
+    # After the reset the same workspace drafts normally.
+    model.limited = False
+    after = engine.run(cfg, github, allow_paid=True, model_factory=lambda: model, now=AFTER_RESET)
+    assert not after.failures and after.drafts_created == 1
+    assert "USAGE_LIMIT_WAIT" not in after.statuses
+
+
+def test_a_usage_limit_on_the_draft_request_uses_no_weekly_draft_slot(work):
+    cfg, _ = work
+    cfg = replace(cfg, weekly_draft_cap=1)
+    model, github = LimitedModel("draft"), Github()
+    first = execute(cfg, github, model, allow_paid=True)
+    assert first.drafts_created == 0 and first.estimated_usd > 0  # discovery only
+    assert first.failures == [
+        f"draft: PROVIDER_USAGE_LIMIT: {LIMIT_TEXT} (phase GENERATE, provider type "
+        "invalid_request_error, request id req_011TestRequestId0001)"
+    ]
+    assert _limit_spending(cfg) == (["discovery"], 0)  # the refused draft request was released
+    # Its attempt record was withdrawn: after the reset, in the same ISO week with a cap of 1,
+    # the story is drafted (a used slot would say WEEKLY_CAP_REACHED; a kept attempt would
+    # refuse with GENERATION_ATTEMPTED).
+    model.limited = False
+    after = engine.run(cfg, github, allow_paid=True, model_factory=lambda: model, now=AFTER_RESET)
+    assert not after.failures and after.drafts_created == 1
+    assert _limit_spending(cfg)[0] == ["discovery", "draft", "fact_check"]
+
+
+def test_a_usage_limit_on_discovery_leaves_no_uncertain_attempt(work):
+    cfg, _ = work
+    model, github = LimitedModel("discovery"), Github()
+    first = execute(cfg, github, model, allow_paid=True)
+    assert [f.split(": ")[1] for f in first.failures] == ["PROVIDER_USAGE_LIMIT"]
+    state = State(cfg.state / "automation.sqlite")
+    assert state.pending(REPO) is None and state.cursor(REPO) is None
+    assert not state.db.execute("SELECT COUNT(*) FROM spending").fetchone()[0]
+    state.close()
+    model.limited = False
+    after = engine.run(cfg, github, allow_paid=True, model_factory=lambda: model, now=AFTER_RESET)
+    assert not after.failures and after.evidence_examined == 1 and after.drafts_created == 1
+
+
+def test_retry_now_runs_during_the_hold_and_clears_it(work):
+    cfg, _ = work
+    model = LimitedModel("count", resets_at=None)  # no reset date: wait 24 hours
+    execute(cfg, model=model, allow_paid=True)
+    state = State(cfg.state / "automation.sqlite")
+    assert state.holding("2026-10-29T00:00:00Z")["until"] == "2026-10-30T00:00:00Z"
+    state.close()
+    # A free run sends no model request, so it is not held.
+    assert "USAGE_LIMIT_WAIT" not in execute(cfg, model=model).statuses
+    model.limited = False
+    result = execute(cfg, model=model, allow_paid=True, retry_now=True)
+    assert not result.failures and result.drafts_created == 1
+    state = State(cfg.state / "automation.sqlite")
+    assert state.holding("2026-10-29T00:00:00Z") is None
+    state.close()
+
+
+def test_a_usage_limit_after_the_draft_says_the_draft_was_made(work):
+    cfg, _ = work
+    result = engine.RunResult(drafts_created=1, usage_limit=_limit(Phase.COUNT))
+    cli._tell(cfg, result, [])
+    assert _notify(cfg)[-1] == (
+        "Shipyap: Anthropic usage limit reached|Your Anthropic API usage limit is reached "
+        "(resets 2026-11-01 00:00 UTC). Raise it in the Anthropic Console or wait. The draft "
+        "was made; the later request was refused and not charged."
+    )

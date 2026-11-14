@@ -23,8 +23,11 @@ The demo is fictional, offline after installation, and needs no accounts or keys
 
 ## Try the demo
 
-On Windows, install Git, [uv](https://docs.astral.sh/uv/getting-started/installation/), and Python
-3.12 or later. Open PowerShell where you keep projects, then clone the repository and open the
+On Windows, install [uv](https://docs.astral.sh/uv/getting-started/installation/). You do not need
+to install Python: the first `uv run --locked` reads `.python-version` and downloads Python 3.12 for
+this project if it is missing. [Git](https://git-scm.com/downloads) is only needed to clone; a ZIP
+download of the repository (Code, then Download ZIP on GitHub), extracted, works the same.
+Open PowerShell where you keep projects, then clone the repository and open the
 sample in your browser:
 
 ```powershell
@@ -32,6 +35,8 @@ git clone https://github.com/devdiv07/shipyap.git
 cd shipyap
 .\scripts\demo.ps1
 ```
+
+If PowerShell blocks scripts on your machine, run `powershell -ExecutionPolicy Bypass -File .\scripts\demo.ps1` instead.
 
 Or start it without opening a browser automatically; Ctrl+click the printed link:
 
@@ -93,6 +98,8 @@ uv run --locked --no-dev shipyap run --config 'C:\work\my-posts\pros.toml' --all
 .\scripts\review.ps1 -Config 'C:\work\my-posts\pros.toml'
 ```
 
+If PowerShell blocks scripts, run `powershell -ExecutionPolicy Bypass -File .\scripts\review.ps1 -Config 'C:\work\my-posts\pros.toml'` instead.
+
 Read each post and its evidence before approving. Approval binds the exact text, destination and
 time. Scheduling is a separate confirmation. For optional publishing to LinkedIn and X, follow
 [Buffer setup](docs/buffer.md). No post is sent without you.
@@ -113,6 +120,7 @@ Measured usage has been about **$0.15–$0.20 per draft at list price**. Costs v
 repository size and discovery work, and provider prices or billing can differ. `max_cost_usd` is
 the estimated reservation ceiling for each run; `weekly_draft_cap` limits draft attempts per week.
 Reservations are estimates, not provider billing guarantees. Set a provider-side spending limit too.
+If drafting fails with a usage-limit message, raise the monthly limit in the Anthropic Console.
 
 ## Scope and limitations
 
@@ -139,10 +147,13 @@ uv sync --locked --no-dev
 .\scripts\setup.ps1 -Config 'C:\work\my-posts\pros.toml' -EnablePaid
 ```
 
+If PowerShell blocks scripts, run `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Config 'C:\work\my-posts\pros.toml' -EnablePaid` instead.
+
 Omit `-EnablePaid` for free runs. When a draft is ready, the notification says how many drafts
 are waiting and has a **Review** button that opens that draft on the review page. If the page is
 already open, the button reuses it. Setup registers a `shipyap://` link handler for your Windows
-user only. Remove the timer and the handler with `.\scripts\setup.ps1 -Remove`.
+user only. Remove the timer and the handler with `.\scripts\setup.ps1 -Remove`
+(or `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Remove`).
 
 ## Ask an AI to help set up
 

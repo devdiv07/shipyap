@@ -6,6 +6,8 @@ request whatever the status, that the credential comes only from PROS_ANTHROPIC_
 no exception text, response body or key survives into an error.
 """
 
+from datetime import UTC, datetime
+
 import anthropic
 import httpx2
 import pytest
@@ -312,3 +314,113 @@ def test_an_implausible_token_count_is_an_unexpected_response(counted):
 def test_only_a_well_formed_request_id_is_kept(request_id):
     answer = drafter(FakeApi(headers={"request-id": request_id})).generate(REQUEST)
     assert answer.request_id is None
+
+
+# A usage-limit refusal as the Messages API sends it: HTTP 400, invalid_request_error, the reset
+# date in the message (synthetic copy of the wording a stranger test met; no network).
+USAGE_LIMIT_BODY = {
+    "type": "error",
+    "error": {
+        "type": "invalid_request_error",
+        "message": "You have reached your specified API usage limits. "
+        "You will regain access on 2026-12-01 at 00:00 UTC.",
+    },
+}
+USAGE_LIMIT_TEXT = (
+    "Your Anthropic API usage limit is reached (resets 2026-12-01 00:00 UTC). Raise it in the "
+    "Anthropic Console or wait. No draft was made and nothing was charged."
+)
+
+
+@pytest.mark.parametrize("phase", [Phase.COUNT, Phase.GENERATE])
+def test_a_usage_limit_400_gets_its_own_code_reset_time_and_plain_message(phase):
+    if phase == Phase.COUNT:
+        api = FakeApi(count_status=400, error=USAGE_LIMIT_BODY)
+        call = drafter(api).count_input_tokens
+    else:
+        api = FakeApi(status=400, error=USAGE_LIMIT_BODY)
+        call = drafter(api).generate
+    with pytest.raises(DraftingError) as caught:
+        call(REQUEST)
+    error = caught.value
+    assert (error.code, error.phase) == (DraftingErrorCode.PROVIDER_USAGE_LIMIT, phase)
+    assert (error.request_id, error.error_type) == (REQUEST_ID, "invalid_request_error")
+    assert error.resets_at == datetime(2026, 12, 1, tzinfo=UTC)
+    assert error.retry_after_seconds is None and len(api.requests) == 1
+    assert error.owner_message() == USAGE_LIMIT_TEXT
+    # The provider's own message is matched, never kept.
+    assert "regain access" not in str(error) and "regain access" not in error.detail()
+
+
+@pytest.mark.parametrize(
+    "status,body,expected",
+    [
+        # Any other 400 stays a generic rejection.
+        (
+            400,
+            {"error": {"type": "invalid_request_error", "message": "max_tokens: too big"}},
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        (
+            400,
+            {
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "Your credit balance is too low to access the API.",
+                }
+            },
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        # The wording alone is not enough: the type must be a request or billing error.
+        (
+            400,
+            {"error": {"type": "api_error", "message": "usage limits reached"}},
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        (
+            400,
+            {"error": {"type": "invalid_request_error"}},
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        (
+            400,
+            {"error": {"type": "invalid_request_error", "message": 7}},
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        (
+            400,
+            {"error": {"type": "invalid_request_error", "message": "usage limit " + "x" * 3000}},
+            DraftingErrorCode.PROVIDER_REQUEST_REJECTED,
+        ),
+        # Only a 400 is a usage limit; a 429 is rate limiting whatever it says.
+        (429, USAGE_LIMIT_BODY, DraftingErrorCode.PROVIDER_RATE_LIMITED),
+        (409, USAGE_LIMIT_BODY, DraftingErrorCode.PROVIDER_REQUEST_REJECTED),
+    ],
+)
+def test_other_rejections_keep_their_codes(status, body, expected):
+    api = FakeApi(status=status, error=body)
+    with pytest.raises(DraftingError) as caught:
+        drafter(api).generate(REQUEST)
+    assert caught.value.code == expected and caught.value.resets_at is None
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "You have reached your specified API usage limits.",
+        "You have reached your specified API usage limits. You will regain access on "
+        "2026-13-45 at 99:99 UTC.",
+        "Usage limit reached. You will regain access on 1 December.",
+    ],
+)
+def test_a_usage_limit_without_a_valid_reset_date_says_so_without_one(message):
+    body = {"error": {"type": "billing_error", "message": message}}
+    api = FakeApi(count_status=400, error=body)
+    with pytest.raises(DraftingError) as caught:
+        drafter(api).count_input_tokens(REQUEST)
+    error = caught.value
+    assert error.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT and error.resets_at is None
+    assert error.owner_message() == (
+        "Your Anthropic API usage limit is reached. Raise it in the Anthropic Console or wait. "
+        "No draft was made and nothing was charged."
+    )

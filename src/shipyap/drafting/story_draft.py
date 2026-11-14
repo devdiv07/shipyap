@@ -434,7 +434,14 @@ class _RecordedDrafter:
             LINK_CAP_BYTES,
             StoryDraftErrorCode.ATTEMPT_WRITE_FAILED,
         )
-        reply = self._drafter.generate(request)
+        try:
+            reply = self._drafter.generate(request)
+        except DraftingError as exc:
+            if exc.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+                # Refused before processing: nothing was generated or billed, so the story goes
+                # back to BRIEF_READY and may be drafted once the limit allows it.
+                _withdraw_attempt(plan.paths.attempt)
+            raise
         try:
             data = response_bytes(reply, plan.brief_sha256, STORY_PROMPT_VERSION)
             _publish_one(
@@ -714,6 +721,16 @@ def _publish_one(out: Path, name: str, data: bytes, cap: int, failure: StoryDraf
         publish_directory(out, [(name, data)], verify)
     except IngestionError:
         raise StoryDraftError(failure) from None
+
+
+def _withdraw_attempt(directory: Path) -> None:
+    """Remove the attempt record this run published, exactly that file and directory. If it
+    cannot be removed, it stays, and a rerun refuses as for any attempted generation."""
+    try:
+        (directory / ATTEMPT_FILE).unlink()
+        directory.rmdir()
+    except OSError:
+        pass
 
 
 def _refuse_drafts_inside(drafts: Path, snapshot_dirs: list[Path]) -> None:

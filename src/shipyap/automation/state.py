@@ -51,6 +51,8 @@ class State:
             CREATE TABLE IF NOT EXISTS spending (
                 id INTEGER PRIMARY KEY, kind TEXT NOT NULL, request_hash TEXT NOT NULL,
                 estimated_usd TEXT NOT NULL, attempted_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS provider_hold (
+                code TEXT PRIMARY KEY, until TEXT NOT NULL, since TEXT NOT NULL);
         """)
 
     def close(self):
@@ -155,6 +157,33 @@ class State:
                 "WHERE repo=? AND revision=?",
                 (json.dumps(reply), repo, revision),
             )
+
+    def withdraw(self, repo, revision):
+        """Forget an UNCERTAIN attempt the provider refused before processing (a usage limit):
+        nothing was generated or billed, so the same revision may be examined again later."""
+        with self.db:
+            self.db.execute(
+                "DELETE FROM generation_attempts WHERE repo=? AND revision=? "
+                "AND status='UNCERTAIN' AND reply_json IS NULL",
+                (repo, revision),
+            )
+
+    def hold(self, code: str, until: str, since: str) -> None:
+        """Paid runs send nothing until `until` (ISO UTC): the provider refused for `code`."""
+        with self.db:
+            self.db.execute(
+                "INSERT OR REPLACE INTO provider_hold VALUES (?, ?, ?)", (code, until, since)
+            )
+
+    def holding(self, now: str):
+        """The active hold row, if any; expired holds are removed."""
+        with self.db:
+            self.db.execute("DELETE FROM provider_hold WHERE until <= ?", (now,))
+        return self.db.execute("SELECT * FROM provider_hold ORDER BY until DESC").fetchone()
+
+    def release(self) -> None:
+        with self.db:
+            self.db.execute("DELETE FROM provider_hold")
 
     def failed(self, repo, revision):
         with self.db:

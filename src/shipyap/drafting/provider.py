@@ -27,9 +27,17 @@ Not controlled here (the operator's environment; see docs/security/threat-model.
 Errors: every SDK exception becomes a fixed `DraftingError`. Exception text, response bodies and
 headers are dropped; only a pattern-checked request id, a numeric retry-after and the
 provider's error type, when it is one of the fixed `PROVIDER_ERROR_TYPES`, survive.
+
+One 400 is told apart from other rejections: the account's API usage limit. The SDK raises a
+plain `BadRequestError` for it (anthropic 1.15.0 has no special class); the body is
+`{"error": {"type": "invalid_request_error", "message": "You have reached your specified API
+usage limits. You will regain access on 2026-12-01 at 00:00 UTC."}}`. The message is read only
+to match "usage limit" and a strict reset-date pattern; the message itself is never kept.
 """
 
 import os
+import re
+from datetime import UTC, datetime
 from typing import Any
 
 import anthropic
@@ -69,6 +77,10 @@ PROVIDER_ERROR_TYPES = frozenset(
         "timeout_error",
     }
 )
+_USAGE_LIMIT_TYPES = frozenset({"invalid_request_error", "billing_error"})
+_USAGE_LIMIT = re.compile(r"\busage limits?\b", re.IGNORECASE)
+_RESETS_AT = re.compile(r"regain access on (\d{4}-\d{2}-\d{2}) at (\d{2}:\d{2}) UTC")
+_MAX_MESSAGE_CHARS = 2_000  # a longer message is not inspected at all
 _RETRY_HINTED = frozenset(
     {DraftingErrorCode.PROVIDER_RATE_LIMITED, DraftingErrorCode.PROVIDER_UNAVAILABLE}
 )
@@ -193,6 +205,8 @@ def _provider_error(exc: anthropic.AnthropicError, phase: Phase) -> DraftingErro
         code = _STATUS_CODES[status]
     elif status >= 500:
         code = DraftingErrorCode.PROVIDER_UNAVAILABLE
+    elif status == 400 and _is_usage_limit(exc.body):
+        code = DraftingErrorCode.PROVIDER_USAGE_LIMIT
     elif status >= 400:
         code = DraftingErrorCode.PROVIDER_REQUEST_REJECTED
     else:  # an unfollowed redirect or other non-error status that is not a success
@@ -204,7 +218,35 @@ def _provider_error(exc: anthropic.AnthropicError, phase: Phase) -> DraftingErro
         request_id=safe_request_id(exc.request_id),
         retry_after_seconds=retry_after if code in _RETRY_HINTED else None,
         error_type=_error_type(exc.body),
+        resets_at=_resets_at(exc.body) if code == DraftingErrorCode.PROVIDER_USAGE_LIMIT else None,
     )
+
+
+def _error_message(body: object) -> str | None:
+    error = body.get("error") if isinstance(body, dict) else None
+    value = error.get("message") if isinstance(error, dict) else None
+    return value if isinstance(value, str) and len(value) <= _MAX_MESSAGE_CHARS else None
+
+
+def _is_usage_limit(body: object) -> bool:
+    """A usage-limit refusal: a known request/billing error type whose message names the limit."""
+    message = _error_message(body)
+    return (
+        _error_type(body) in _USAGE_LIMIT_TYPES
+        and message is not None
+        and _USAGE_LIMIT.search(message) is not None
+    )
+
+
+def _resets_at(body: object) -> datetime | None:
+    """The reset time the message gives, only when it is a valid date in the fixed wording."""
+    match = _RESETS_AT.search(_error_message(body) or "")
+    if match is None:
+        return None
+    try:
+        return datetime.strptime(" ".join(match.groups()), "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
+    except ValueError:
+        return None
 
 
 def _error_type(body: object) -> str | None:

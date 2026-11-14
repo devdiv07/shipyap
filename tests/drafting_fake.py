@@ -128,8 +128,10 @@ class FakeApi:
         count_status: int = 200,
         headers: dict[str, str] | None = None,
         raise_on: dict[str, Exception] | None = None,
+        error: dict | None = None,
     ) -> None:
         self.message = message_body() if message is None else message
+        self.error = error_body() if error is None else error
         self.counted = counted
         self.status = status
         self.count_status = count_status
@@ -154,11 +156,11 @@ class FakeApi:
             raise self.raise_on[path]
         if path == "/v1/messages/count_tokens":
             if self.count_status != 200:
-                return httpx2.Response(self.count_status, json=error_body(), headers=self.headers)
+                return httpx2.Response(self.count_status, json=self.error, headers=self.headers)
             return httpx2.Response(200, json={"input_tokens": self.counted}, headers=self.headers)
         if path == "/v1/messages":
             if self.status != 200:
-                return httpx2.Response(self.status, json=error_body(), headers=self.headers)
+                return httpx2.Response(self.status, json=self.error, headers=self.headers)
             return httpx2.Response(200, json=self.message, headers=self.headers)
         return httpx2.Response(404, json=error_body())
 

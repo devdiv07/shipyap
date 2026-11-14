@@ -3,7 +3,8 @@
 As in ingestion and editorial, a failure is a code plus a fixed message. Nothing from the API key,
 the brief, the provider's response body or error text, a local path or an OS error is put into an
 error. What may accompany a code is provider metadata that cannot carry content: a request id that
-matched a strict pattern, token counts, a retry-after number of seconds and cost estimates.
+matched a strict pattern, token counts, a retry-after number of seconds, cost estimates and, for a
+usage-limit refusal, the reset time when it matched a strict date pattern.
 
 Every error also records how far the run got (`Phase`), because that decides what may have been
 billed: nothing before the token count, nothing for a token count (it does not generate), and
@@ -11,6 +12,7 @@ possibly the whole generation request once it was sent.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -40,6 +42,7 @@ class DraftingErrorCode(StrEnum):
     PROVIDER_PERMISSION_DENIED = "PROVIDER_PERMISSION_DENIED"
     PROVIDER_NOT_FOUND = "PROVIDER_NOT_FOUND"
     PROVIDER_REQUEST_REJECTED = "PROVIDER_REQUEST_REJECTED"
+    PROVIDER_USAGE_LIMIT = "PROVIDER_USAGE_LIMIT"  # the account's API usage limit is reached
     PROVIDER_REQUEST_TOO_LARGE = "PROVIDER_REQUEST_TOO_LARGE"
     PROVIDER_RATE_LIMITED = "PROVIDER_RATE_LIMITED"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
@@ -77,6 +80,9 @@ MESSAGES: dict[DraftingErrorCode, str] = {
     DraftingErrorCode.PROVIDER_NOT_FOUND: "the provider does not know this model or endpoint",
     DraftingErrorCode.PROVIDER_REQUEST_REJECTED: (
         "the provider rejected the request (for example its format, credit or spend limits)"
+    ),
+    DraftingErrorCode.PROVIDER_USAGE_LIMIT: (
+        "the Anthropic API usage limit of this account is reached; the request was refused"
     ),
     DraftingErrorCode.PROVIDER_REQUEST_TOO_LARGE: "the provider rejected the request as too large",
     DraftingErrorCode.PROVIDER_RATE_LIMITED: "the provider rate-limited the request",
@@ -118,6 +124,7 @@ class DraftingError(Exception):
         retry_after_seconds: int | None = None,
         estimate: Estimate | None = None,
         error_type: str | None = None,
+        resets_at: datetime | None = None,
     ) -> None:
         super().__init__(f"{code}: {MESSAGES[code]}")
         self.code = code
@@ -126,6 +133,23 @@ class DraftingError(Exception):
         self.retry_after_seconds = retry_after_seconds
         self.estimate = estimate
         self.error_type = error_type  # one of provider.PROVIDER_ERROR_TYPES, or None
+        self.resets_at = resets_at  # UTC, only for PROVIDER_USAGE_LIMIT with a parsed date
+
+    def owner_message(self, *, drafted: bool = False) -> str:
+        """Plain words for the run report and the notification. Only a usage limit has them."""
+        if self.code != DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+            return MESSAGES[self.code]
+        resets = f" (resets {self.resets_at:%Y-%m-%d %H:%M} UTC)" if self.resets_at else ""
+        # A refused request is not processed, so it is not billed.
+        outcome = (
+            "The draft was made; the later request was refused and not charged."
+            if drafted
+            else "No draft was made and nothing was charged."
+        )
+        return (
+            f"Your Anthropic API usage limit is reached{resets}. "
+            f"Raise it in the Anthropic Console or wait. {outcome}"
+        )
 
     def detail(self) -> str:
         """Phase, provider error type and request id, for a run note; empty when unknown."""

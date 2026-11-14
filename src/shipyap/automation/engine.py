@@ -76,12 +76,14 @@ _ERRORS = (
 )
 
 
-def _code(error: Exception) -> str:
+def _code(error: Exception, *, drafted: bool = False) -> str:
     if isinstance(error, AutomationError):
         return str(error)
     if hasattr(error, "cause"):
-        return _code(error.cause)
+        return _code(error.cause, drafted=drafted)
     if isinstance(error, DraftingError):
+        if error.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+            return f"{error.code}: {error.owner_message(drafted=drafted)}{error.detail()}"
         return f"{error.code}{error.detail()}"
     return str(error.code) if hasattr(error, "code") else "LOCAL_IO_FAILED"
 
@@ -107,6 +109,14 @@ class RunResult:
     notes: list[str] = field(default_factory=list)  # style flags for the owner; never failures
     repairs: list[str] = field(default_factory=list)  # one line per repaired draft, with its cost
     shelved: list[str] = field(default_factory=list)  # drafts shelved this run, with reasons
+    usage_limit: DraftingError | None = None  # the provider's usage-limit refusal, if any
+
+
+USAGE_LIMIT_HOLD = timedelta(hours=24)  # when the provider gives no reset time
+
+
+def _utc(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # sorts as text
 
 
 STOP_FILE = "STOP"  # create this file in the workspace root to stop every run
@@ -158,7 +168,7 @@ def _fact_check(config, budget, result, plan) -> None:
         return
     except _ERRORS as exc:
         result.failures.append(
-            f"fact check: {_code(exc)}; read the draft against the repo yourself"
+            f"fact check: {_code(exc, drafted=True)}; read the draft against the repo yourself"
         )
         return
     factcheck.save(config.state, plan.story.story_id, plan.paths.draft, verdicts)
@@ -193,6 +203,17 @@ class _Budget:
             self.model = self.factory()  # the production key is read lazily, only for new work
         return self.model
 
+    def _call(self, method: str, request):
+        """One provider call. After a usage-limit refusal, no further request is sent this run."""
+        if self.result.usage_limit is not None:
+            raise self.result.usage_limit
+        try:
+            return getattr(self.adapter(), method)(request)
+        except DraftingError as exc:
+            if exc.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+                self.result.usage_limit = exc
+            raise
+
     def counted(self, request, tokens):
         estimate = counted_estimate(request.model, tokens, request.max_tokens)
         held = self.fact_check_hold if self.kind != "fact_check" else Decimal(0)
@@ -203,10 +224,10 @@ class _Budget:
         return estimate
 
     def count_input_tokens(self, request):
-        tokens = self.adapter().count_input_tokens(request)
+        tokens = self._call("count_input_tokens", request)
         if self.kind == "draft" and self.draft_snapshot is not None:
             check = factcheck.build_request(request.model, self.draft_snapshot, [])
-            base_tokens = self.adapter().count_input_tokens(check)
+            base_tokens = self._call("count_input_tokens", check)
             # A JSON-escaped code point takes at most six bytes; reserve one token per byte,
             # with space for every allowed segment's identifier and framing. The real provider
             # count is checked against this hold before the fact-check request is sent.
@@ -237,13 +258,22 @@ class _Budget:
             raise AutomationError("COUNT_REQUEST_MISMATCH")
         estimate = self.counted(request, tokens).max_cost_usd
         with self.state.db:
-            self.state.db.execute(
+            row = self.state.db.execute(
                 "INSERT INTO spending(kind, request_hash, estimated_usd, "
                 "attempted_at) VALUES (?, ?, ?, ?)",
                 (self.kind, digest, str(estimate), datetime.now(UTC).isoformat()),
-            )
+            ).lastrowid
         self.result.estimated_usd += estimate  # reserve even if the call raises
-        reply = self.adapter().generate(request)
+        try:
+            reply = self._call("generate", request)
+        except DraftingError as exc:
+            if exc.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+                # Refused before processing, so not billed: release the reservation, and the
+                # request does not use a weekly draft slot.
+                with self.state.db:
+                    self.state.db.execute("DELETE FROM spending WHERE id = ?", (row,))
+                self.result.estimated_usd -= estimate
+            raise
         self.result.charged_usd += charge_estimate(request.model, reply.usage)
         return reply
 
@@ -265,7 +295,12 @@ class _RecordedGeneration:
             self.tokens,
             counted_estimate(request.model, self.tokens, request.max_tokens).max_cost_usd,
         )
-        reply = self.budget.generate(request)
+        try:
+            reply = self.budget.generate(request)
+        except DraftingError as exc:
+            if exc.code == DraftingErrorCode.PROVIDER_USAGE_LIMIT:
+                self.state.withdraw(self.repo, self.revision)  # not processed, not billed
+            raise
         # Raw output is not success. Every recovery runs the original parser/checks again.
         self.state.responded(self.repo, self.revision, asdict(reply))
         return reply
@@ -441,10 +476,12 @@ def _examine(config, state, budget, result, repo, revision, snapshot, now, allow
                 plan, drafter, config.preferences, config.backlog, out, now
             )
         except StoryGenerationFailed as exc:
+            pending_row = state.pending(repo)
             if (
                 not exc.findings_written
                 and isinstance(exc.cause, (DraftingError, StoryError))
-                and state.pending(repo)["status"] == "RESPONDED"
+                and pending_row is not None
+                and pending_row["status"] == "RESPONDED"
             ):
                 state.failed(repo, revision)
             raise
@@ -472,6 +509,7 @@ def run(
     model_factory: Callable[[], Drafter] | None = None,
     now: datetime | None = None,
     reexamine: tuple[str, ...] = (),
+    retry_now: bool = False,
 ) -> RunResult:
     now = now or datetime.now(UTC)
     if (config.workspace_root / STOP_FILE).exists():
@@ -490,6 +528,7 @@ def run(
                 model_factory or _production_model,
                 now,
                 reexamine,
+                retry_now,
             )
         finally:
             state.close()
@@ -512,7 +551,41 @@ def _production_model() -> Drafter:
     return AnthropicDrafter(load_api_key())
 
 
-def _run_locked(config, transport, state, allow_paid, factory, now, reexamine=()):
+def _run_locked(config, transport, state, allow_paid, factory, now, reexamine=(), retry_now=False):
+    held = _held(state, now, allow_paid, retry_now)
+    if held is not None:
+        return held
+    result = _run_unheld(config, transport, state, allow_paid, factory, now, reexamine)
+    if result.usage_limit is not None:
+        # One notification per reset period: later timer runs send nothing until then.
+        until = result.usage_limit.resets_at or now + USAGE_LIMIT_HOLD
+        state.hold(DraftingErrorCode.PROVIDER_USAGE_LIMIT, _utc(max(until, now)), _utc(now))
+        result.statuses.insert(0, "USAGE_LIMIT_REACHED")
+    elif retry_now and allow_paid:
+        state.release()
+    return result
+
+
+def _held(state, now, allow_paid, retry_now) -> RunResult | None:
+    """A paid run during a usage-limit hold sends nothing and tells nobody again; the reason
+    stays in last-run.txt. A free run sends no model request, so it is never held."""
+    if not allow_paid:
+        return None
+    row = state.holding(_utc(now))
+    if row is None or retry_now:
+        return None
+    until = row["until"].replace("T", " ").removesuffix("Z")[:16]
+    return RunResult(
+        statuses=["USAGE_LIMIT_WAIT"],
+        notes=[
+            f"draft: the Anthropic API usage limit was reached on {row['since'][:10]}; this run "
+            f"read, sent and spent nothing, and paid runs wait until {until} UTC. Raised the "
+            "limit in the Anthropic Console already? Run pros run with --allow-paid --retry-now"
+        ],
+    )
+
+
+def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()):
     drafts_this_week = _paid_drafts_this_week(state, now)
     if config.max_new_drafts and drafts_this_week >= config.weekly_draft_cap:
         # Checked before anything is read or sent: discovery is paid too, and a run that cannot
@@ -554,6 +627,8 @@ def _run_locked(config, transport, state, allow_paid, factory, now, reexamine=()
     result.existing_available = len(initial_ids)
     budget = _Budget(config, state, factory, result)
     for repo in repos:
+        if result.usage_limit is not None:
+            break  # every further request would be refused the same way
         result.repositories_inspected += 1
         try:
             pending = state.pending(repo.repo_id)
@@ -642,7 +717,7 @@ def _run_locked(config, transport, state, allow_paid, factory, now, reexamine=()
     snapshots = usable
     result.snapshots = snapshots
     waiting = _available(config, set_aside)
-    if config.max_new_drafts and waiting:
+    if config.max_new_drafts and waiting and result.usage_limit is None:
         try:
             plan = plan_story_draft(
                 config.preferences,
