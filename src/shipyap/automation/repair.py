@@ -6,7 +6,7 @@ Order, after the draft's checks and fact check have run:
    when it is only an aside (in parentheses or between commas); when NO_LIMITATION_REFERENCE
    fires, append the cited record's own scope statement (`grounding.scope_lines`) as a new
    sentence citing exactly those lines. After a dropped sentence the post must still stand: at
-   least POST_TARGET_MIN characters, its opening kept, a source-cited sentence left, and no kept
+   least the voice's floor (`prompt.length_range`: 800 for p4 and earlier, 300 for p5), its opening kept, a source-cited sentence left, and no kept
    sentence opening with a word that pointed at the dropped one. Otherwise SHELVED at once.
 2. At most MAX_ROUNDS model rounds, one repair call each. A round sends only the sentences that
    are blocked or that the fact check calls OUTDATED, CONTRADICTED or OVERSTATED, each with the
@@ -38,7 +38,9 @@ from shipyap.automation import factcheck
 from shipyap.drafting.errors import DraftingError
 from shipyap.drafting.models import Drafter, ModelRequest
 from shipyap.drafting.policy import EFFORT, charge_estimate, counted_estimate
+from shipyap.drafting.prompt import LENGTH_P4, length_range, p5_body_limit
 from shipyap.drafting.story_prompt import render_line
+from shipyap.editorial.closing import CLOSING_ID
 from shipyap.editorial.errors import EditorialError
 from shipyap.editorial.grounding import (
     check_draft,
@@ -50,6 +52,7 @@ from shipyap.editorial.grounding import (
 from shipyap.editorial.inputs import parse_response
 from shipyap.editorial.models import (
     AssertionMap,
+    Basis,
     Brief,
     DraftResponse,
     FindingCode,
@@ -57,6 +60,7 @@ from shipyap.editorial.models import (
 )
 from shipyap.editorial.sources import VerifiedSnapshot
 from shipyap.editorial.supersession import Record, check_superseded
+from shipyap.editorial.voice import is_dry_nerdy
 from shipyap.evidence.report import canonical_json
 from shipyap.evidence.snapshot import read_input
 from shipyap.evidence.strict_json import StrictJsonError, loads_strict
@@ -66,8 +70,10 @@ from shipyap.review.gate import Gate, judge
 
 MAX_ROUNDS = 2
 REPAIR_MAX_OUTPUT_TOKENS = 1500
-POST_TARGET_MAX = 1300  # the house-style ceiling; a free scope sentence never pushes past it
-POST_TARGET_MIN = 800  # the house-style floor; a post that falls under it after a drop is shelved
+# The house-style range of p4 and earlier drafts; p5 (voice dry-nerdy) uses 300-800. A post under
+# its floor after a dropped sentence is shelved; a free scope sentence never pushes it past the
+# ceiling. Which range applies comes from the draft's generator label (`prompt.length_range`).
+POST_TARGET_MIN, POST_TARGET_MAX = LENGTH_P4
 # Blocks a free repair may resolve by dropping the sentence, when it cites no source lines.
 DROPPABLE = frozenset({FindingCode.TOOL_ITEM_CITED, FindingCode.TOOL_PHRASE})
 # A sentence opening with one of these leans on the sentence before it.
@@ -287,6 +293,7 @@ def repair(
             outcome.reasons.append("needs a model round, and no model is available here")
             break
         flagged = state.flagged()
+        trimming = _framing_claims(response, flagged)
         current = Round(number, sorted(flagged))
         outcome.rounds.append(current)
         try:
@@ -317,6 +324,26 @@ def repair(
             outcome.reasons.append(f"round {number}: re-check {exc.code}")
             break
         state = assess(brief, response, records, _doc(verdicts, checked))
+        if trimming:
+            # A dry line gets one trim; still blocked (or emptied), it is removed for free.
+            still = [
+                sid
+                for sid in sorted(trimming)
+                if sid in state.flagged() and any(s.id == sid for s in response.segments)
+            ]
+            if still:
+                before = response
+                response = _apply(response, dict.fromkeys(still, ""))
+                verdicts = {sid: v for sid, v in verdicts.items() if sid not in still}
+                outcome.free += [
+                    f"{sid}: removed the dry line after one trim did not clear FRAMING_HAS_CLAIM"
+                    for sid in still
+                ]
+                problems = drop_problems(brief, before, response)
+                if problems:
+                    outcome.reasons += problems
+                    break
+                state = assess(brief, response, records, _doc(verdicts, checked))
 
     outcome.response = response
     outcome.fact_check = _doc(verdicts, checked) if checked else None
@@ -330,6 +357,24 @@ def repair(
         f"{sid}: {reason}" for sid, reasons in state.flagged().items() for reason in reasons
     ]
     return outcome
+
+
+def _framing_claims(response: DraftResponse, flagged: dict[str, list[str]]) -> set[str]:
+    """The flagged FRAMING lines blocked for FRAMING_HAS_CLAIM: a round asks to trim their claim
+    part, not to remove them (C2c)."""
+    framing = {s.id for s in response.segments if s.basis == Basis.FRAMING}
+    return {sid for sid, reasons in flagged.items() if sid in framing and _trims(reasons)}
+
+
+def _trims(reasons: list[str]) -> bool:
+    return any(r.startswith(FindingCode.FRAMING_HAS_CLAIM.value) for r in reasons)
+
+
+TRIM_FRAMING = (
+    "instruction: this line has no references. Keep its remark and trim only the part that "
+    "states a fact about the code or the tool (the words named above); return the trimmed line, "
+    "not an empty text. Only if nothing is left without them, return an empty text.\n"
+)
 
 
 def _model_round(
@@ -367,18 +412,24 @@ def _model_round(
     verdicts = {sid: v for sid, v in verdicts.items() if sid not in rewrites}
     kept = [s for s in response.segments if s.id in rewrites]
     if checked and kept:
+        amap = check_draft(brief, response, "0" * 64, "0" * 64)  # only its findings are read
+        supplied = factcheck.meaning_lines(
+            [s.model_dump(mode="json") for s in amap.segments if s.id in rewrites]
+        )
         recheck = factcheck.build_request(
             model,
             snapshot,
             [{"id": s.id, "text": s.text} for s in kept],
             factcheck.RECHECK_MAX_OUTPUT_TOKENS,
+            supplied,
         )
         tokens = drafter.count_input_tokens(recheck)
         current.reserved_usd += counted_estimate(model, tokens, recheck.max_tokens).max_cost_usd
         reply = drafter.generate(recheck)
         current.charged_usd += charge_estimate(model, reply.usage)
-        for verdict in factcheck.parse_reply(reply.texts, reply.stop_reason, [s.id for s in kept]):
-            verdicts[verdict.segment_id] = verdict.__dict__ | {"refs": list(verdict.refs)}
+        ids = [s.id for s in kept]
+        for verdict in factcheck.parse_reply(reply.texts, reply.stop_reason, ids, supplied):
+            verdicts[verdict.segment_id] = verdict.as_dict()
     return response, verdicts, None
 
 
@@ -441,17 +492,31 @@ def _free_repairs(
     if state.scope_missing:
         added = _scope_segment(brief, data)
         if added is not None:
-            data["segments"].append(added)
-            if len(render_post(_parse(data).segments)) <= POST_TARGET_MAX:
+            segments = data["segments"]
+            ends_closed = bool(segments) and segments[-1]["id"] == CLOSING_ID
+            at = len(segments) - 1 if ends_closed else len(segments)
+            segments.insert(at, added)  # the tool's closing line stays last (C2c)
+            ceiling, chars = _budget(response.generator.label, _parse(data).segments)
+            if chars <= ceiling:
                 ref = added["source_refs"][0]
                 log.append(
                     f"{added['id']}: added the record's own scope line "
                     f"({ref['path']}:{ref['line_start']}-{ref['line_end']})"
                 )
             else:
-                data["segments"].pop()
-                log.append(f"scope line not added: the post would pass {POST_TARGET_MAX} chars")
+                segments.pop(at)
+                log.append(f"scope line not added: the post would pass {ceiling} chars")
     return _parse(data)
+
+
+def _budget(label: str, segments) -> tuple[int, int]:
+    """(ceiling, characters used) for a free scope line. A p5 post that ends with the tool's
+    closing line is held to the body budget the drafting prompt gave it (`p5_body_limit`), its
+    own text measured without the closing; anything else to its whole-post ceiling."""
+    segments = list(segments)
+    if is_dry_nerdy(label) and segments and segments[-1].id == CLOSING_ID:
+        return p5_body_limit(segments[-1].text), len(render_post(segments[:-1]))
+    return length_range(label)[1], len(render_post(segments))
 
 
 def drop_problems(brief: Brief, before: DraftResponse, after: DraftResponse) -> list[str]:
@@ -464,10 +529,9 @@ def drop_problems(brief: Brief, before: DraftResponse, after: DraftResponse) -> 
     names = ", ".join(dropped)
     problems = []
     chars = len(render_post(after.segments))
-    if chars < POST_TARGET_MIN:
-        problems.append(
-            f"after dropping {names} the post is {chars} characters, under {POST_TARGET_MIN}"
-        )
+    floor = length_range(before.generator.label)[0]
+    if chars < floor:
+        problems.append(f"after dropping {names} the post is {chars} characters, under {floor}")
     if before.segments[0].id in dropped:
         problems.append(f"dropping {names} removed the opening sentence")
     if not any(segment.source_refs for segment in after.segments):
@@ -549,6 +613,8 @@ def build_request(
         parts.append(f"\n<<<FLAGGED id={segment.id}>>>\n")
         parts.append(f"text: {json.dumps(segment.text, ensure_ascii=False)}\n")
         parts += [f"reason: {reason}\n" for reason in flagged[segment.id]]
+        if segment.basis == Basis.FRAMING and _trims(flagged[segment.id]):
+            parts.append(TRIM_FRAMING)
         for ref in segment.source_refs:
             lines = sources.get(ref.path, ())
             parts.append(
@@ -699,7 +765,9 @@ def _verdicts(fact_check: dict | None) -> dict[str, dict]:
 
 
 def _doc(verdicts: dict[str, dict], checked: bool) -> dict | None:
-    return {"verdicts": list(verdicts.values())} if checked else None
+    if not checked:
+        return None
+    return {"prompt_version": factcheck.PROMPT_VERSION, "verdicts": list(verdicts.values())}
 
 
 def _flat(text: str) -> str:

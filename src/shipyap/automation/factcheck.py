@@ -4,15 +4,26 @@ OVERSTATED or UNVERIFIABLE. It never edits the draft or approves anything; it te
 what to look at before approving. A model's judgement, not proof: the owner still decides.
 
 One request per new draft, through the run's budget (counted, capped, recorded as spending),
-never retried. Its result is kept in the automation state, keyed by the story."""
+never retried. Its result is kept in the automation state, keyed by the story.
+
+C1: when the checks find that a sentence says what a value means while the value is also set in
+lines it does not cite (CODE_MEANING_INCOMPLETE), those lines are sent beside the sentence, and
+this module (not the model) records them on its verdict as `supplied`. The review gate lifts
+that block only for a SUPPORTED verdict that lists them.
+
+PROMPT_VERSION f2 changes only the text inside that extra-lines block (a per-value procedure):
+a request for a draft with no such lines is byte-identical to f1's. Every stored result records
+the version that judged it."""
 
 import json
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from shipyap.drafting.models import ModelRequest
 from shipyap.drafting.policy import EFFORT
 from shipyap.drafting.story_prompt import render_line, select_lines
+from shipyap.editorial.code_claims import gap_labels
 from shipyap.editorial.sources import VerifiedSnapshot
 from shipyap.evidence.strict_json import StrictJsonError, loads_strict
 from shipyap.stories.roles import ROLE_NOTES, role
@@ -22,6 +33,9 @@ FLAGGED = ("OUTDATED", "CONTRADICTED", "OVERSTATED")
 MAX_OUTPUT_TOKENS = 4000
 RECHECK_MAX_OUTPUT_TOKENS = 1000  # auto-repair re-checks only the sentences it rewrote
 DIRECTORY = "fact-checks"
+# f1 (implicit, before 2026-11-22): "judge the sentence against them too". f2: the per-value
+# procedure in SUPPLIED_HEADER. Nothing outside the ALSO CHECK block changed.
+PROMPT_VERSION = "f2"
 
 SYSTEM_PROMPT = """\
 You check one LinkedIn draft against ALL files of one pinned repository snapshot. Both are in \
@@ -93,6 +107,15 @@ class Verdict:
     verdict: str
     reason: str
     refs: tuple[str, ...]  # "path:start-end"
+    supplied: tuple[str, ...] = field(default=())  # lines this module sent beside the sentence
+
+    def as_dict(self) -> dict:
+        value = {**self.__dict__, "refs": list(self.refs)}
+        if self.supplied:
+            value["supplied"] = list(self.supplied)
+        else:
+            value.pop("supplied")
+        return value
 
 
 class FactCheckError(Exception):
@@ -101,12 +124,36 @@ class FactCheckError(Exception):
         self.code = code
 
 
+_LABEL = re.compile(r"(.+):(\d+)-(\d+)")
+SUPPLIED_HEADER = (
+    "These lines also set a value the sentence describes. Check them one value at a time: for "
+    "each value set here, apply the condition or comparison the sentence relies on (for example "
+    "a substring test such as includes(...), an equality or a lookup) to that exact value, and "
+    "work out what the reader or the user would then see. If any value gives a result the "
+    "sentence denies, hides or does not cover, the verdict is CONTRADICTED, or OVERSTATED for a "
+    "takeaway or general lesson; name that value and its line in the reason. Only when every "
+    "value fits the sentence is it SUPPORTED:\n"
+)
+
+
+def meaning_lines(segments: list[dict]) -> dict[str, tuple[str, ...]]:
+    """Segment id -> the CODE_MEANING_INCOMPLETE lines of an assertion map's segments."""
+    found: dict[str, tuple[str, ...]] = {}
+    for segment in segments:
+        for finding in segment.get("findings") or ():
+            if finding.get("code") == "CODE_MEANING_INCOMPLETE":
+                found[segment["id"]] = gap_labels(finding.get("detail"))
+    return {sid: labels for sid, labels in found.items() if labels}
+
+
 def build_request(
     model: str,
     snapshot: VerifiedSnapshot,
     segments: list[dict],
     max_tokens: int = MAX_OUTPUT_TOKENS,
+    supplied: dict[str, tuple[str, ...]] | None = None,
 ) -> ModelRequest:
+    """`supplied`: segment id -> "path:n-n" lines to send beside that sentence (C1)."""
     chosen = select_lines(snapshot)
     parts = [
         f"Pinned revision: {snapshot.revision_sha}\n",
@@ -129,6 +176,20 @@ def build_request(
     for segment in segments:
         parts.append(f"{segment['id']}: {json.dumps(segment['text'], ensure_ascii=False)}\n")
     parts.append("<<<END DRAFT SEGMENTS>>>\n")
+    files = {source.path: source.lines for source in snapshot.sources}
+    for segment in segments:
+        rendered = []
+        for label in (supplied or {}).get(segment["id"], ()):
+            found = _LABEL.fullmatch(label)
+            if found is None or found.group(1) not in files:
+                continue
+            lines = files[found.group(1)]
+            for n in range(int(found.group(2)), min(int(found.group(3)), len(lines)) + 1):
+                rendered.append(f"{json.dumps(found.group(1))} " + render_line(n, lines[n - 1]))
+        if rendered:
+            parts.append(f"\n<<<ALSO CHECK id={segment['id']}>>>\n{SUPPLIED_HEADER}")
+            parts += rendered
+            parts.append("<<<END ALSO CHECK>>>\n")
     return ModelRequest(
         model=model,
         system_prompt=SYSTEM_PROMPT,
@@ -139,7 +200,20 @@ def build_request(
     )
 
 
-def parse_reply(texts: tuple[str, ...], stop_reason: str | None, ids: list[str]) -> list[Verdict]:
+def parse_reply(
+    texts: tuple[str, ...],
+    stop_reason: str | None,
+    ids: list[str],
+    supplied: dict[str, tuple[str, ...]] | None = None,
+) -> list[Verdict]:
+    """`supplied`: what `build_request` sent beside each sentence, recorded on its verdict."""
+    return [
+        Verdict(v.segment_id, v.verdict, v.reason, v.refs, (supplied or {}).get(v.segment_id, ()))
+        for v in _parse_reply(texts, stop_reason, ids)
+    ]
+
+
+def _parse_reply(texts: tuple[str, ...], stop_reason: str | None, ids: list[str]) -> list[Verdict]:
     if stop_reason != "end_turn" or len(texts) != 1:
         raise FactCheckError("FACT_CHECK_REPLY_UNUSABLE")
     try:
@@ -169,15 +243,31 @@ def parse_reply(texts: tuple[str, ...], stop_reason: str | None, ids: list[str])
     ]
 
 
+def _closing_record(record: dict) -> bool:
+    """An assertion-map record of the tool's closing line (C2c): never sent to the fact check."""
+    from shipyap.editorial.closing import CLOSING_ID
+
+    return (
+        record.get("id") == CLOSING_ID
+        and record.get("declared_basis") == "FRAMING"
+        and not record.get("source_refs")
+        and not record.get("author_refs")
+        and not record.get("findings")
+    )
+
+
 def run_fact_check(drafter, model: str, snapshot: VerifiedSnapshot, draft_dir: Path):
     amap = json.loads((draft_dir / "assertion-map.json").read_text(encoding="utf-8"))
-    segments = [{"id": s["id"], "text": s["text"]} for s in amap["segments"]]
+    segments = [
+        {"id": s["id"], "text": s["text"]} for s in amap["segments"] if not _closing_record(s)
+    ]
     if not segments:
         return []
-    request = build_request(model, snapshot, segments)
+    supplied = meaning_lines(amap["segments"])
+    request = build_request(model, snapshot, segments, supplied=supplied)
     drafter.count_input_tokens(request)
     reply = drafter.generate(request)
-    return parse_reply(reply.texts, reply.stop_reason, [s["id"] for s in segments])
+    return parse_reply(reply.texts, reply.stop_reason, [s["id"] for s in segments], supplied)
 
 
 def save(state_dir: Path, story_id: str, draft_dir: Path, verdicts: list[Verdict]) -> Path:
@@ -188,7 +278,8 @@ def save(state_dir: Path, story_id: str, draft_dir: Path, verdicts: list[Verdict
         json.dumps(
             {
                 "draft": draft_dir.name,
-                "verdicts": [v.__dict__ | {"refs": list(v.refs)} for v in verdicts],
+                "prompt_version": PROMPT_VERSION,
+                "verdicts": [v.as_dict() for v in verdicts],
             },
             indent=2,
             ensure_ascii=False,

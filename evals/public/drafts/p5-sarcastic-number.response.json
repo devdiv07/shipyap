@@ -1,0 +1,87 @@
+{
+  "response_version": "1",
+  "brief_sha256": "1030c4d35ec1943fd12f0a0fd469ff86e509ea7eb574388c1f0e876550d3463d",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture via draft-model p5"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "On a parse error, the toy review route falls back to ruleCheck.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "api/review.ts",
+          "line_start": 11,
+          "line_end": 15,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "The return line after that still sets source to model, whichever path produced the score.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "api/review.ts",
+          "line_start": 10,
+          "line_end": 16,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S03",
+      "text": "The badge text comes from review.source: Model Review when it equals model, otherwise Rule Check.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 31,
+          "line_end": 33,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": true
+    },
+    {
+      "id": "S04",
+      "text": "So a score from the rule check can sit under a Model Review badge.",
+      "basis": "INTERPRETATION",
+      "source_refs": [
+        {
+          "path": "api/review.ts",
+          "line_start": 13,
+          "line_end": 16,
+          "quote": null
+        },
+        {
+          "path": "app/desk.tsx",
+          "line_start": 31,
+          "line_end": 33,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S05",
+      "text": "A solid 40 points of borrowed confidence.",
+      "basis": "FRAMING",
+      "source_refs": [],
+      "author_refs": [],
+      "paragraph_break_before": true
+    }
+  ],
+  "verification_needed": []
+}

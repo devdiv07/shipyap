@@ -138,8 +138,13 @@ def plan_model_draft(
 
 
 def run_model_draft(
-    prepared: PreparedBrief, plan: DraftPlan, drafter: Drafter, out: Path
+    prepared: PreparedBrief,
+    plan: DraftPlan,
+    drafter: Drafter,
+    out: Path,
+    closing: str | None = None,
 ) -> ModelDraftResult:
+    """`closing`: the tool's closing line (C2c), added after the model's text; None adds none."""
     estimate = counted_estimate(plan.model, drafter.count_input_tokens(plan.request))
     if estimate.max_cost_usd > plan.budget_usd:
         raise DraftingError(DraftingErrorCode.BUDGET_EXCEEDED, phase=Phase.COUNT, estimate=estimate)
@@ -155,7 +160,13 @@ def run_model_draft(
         raw = response_bytes(
             reply, prepared.brief_sha256, prompt_version(plan.request.system_prompt)
         )
-        build = build_from_response(prepared, checked_input(raw, prepared.brief).data, out)
+        data = checked_input(raw, prepared.brief).data
+        if closing is not None:
+            from shipyap.editorial.closing import add_closing
+            from shipyap.editorial.models import MAX_SEGMENTS
+
+            data = add_closing(data, closing, prepared.brief.snapshot.source_url, MAX_SEGMENTS)
+        build = build_from_response(prepared, data, out)
     except (DraftingError, EditorialError) as exc:
         raise GenerationRejected(exc, call) from None
     return ModelDraftResult(build=build, preflight=estimate, call=call)

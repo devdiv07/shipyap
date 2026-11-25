@@ -7,6 +7,7 @@ import sqlite3
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import NoReturn
 
@@ -41,15 +42,34 @@ def _tell(config, result, posted: list[str]) -> None:
         waiting = repair.shelved(config.drafts)
     except OSError:
         waiting = []
-    lines = [
-        f"{datetime.now(UTC):%Y-%m-%d %H:%M} UTC: {' / '.join(dict.fromkeys(result.statuses))}",
-        f"drafts created {result.drafts_created}, estimated spend ${result.estimated_usd:.4f} "
-        f"reserved (a ceiling), ${result.charged_usd:.4f} at list price for the usage reported",
-        *(f"needs you: {failure}" for failure in result.failures),
-        *(f"needs you: draft shelved {line}" for line in result.shelved),
-        *(f"repair: {line}" for line in result.repairs),
+    run = result.summary
+    if run is None:
+        lines = [
+            f"{datetime.now(UTC):%Y-%m-%d %H:%M} UTC: {' / '.join(dict.fromkeys(result.statuses))}",
+            f"drafts created {result.drafts_created}, estimated spend ${result.estimated_usd:.4f} "
+            f"reserved (a ceiling), ${result.charged_usd:.4f} at list price for the usage reported",
+        ]
+        failures, refusals, shelved = result.failures, result.refusals, result.shelved
+        repairs, notes = result.repairs, result.notes
+    else:
+        # The plan route (C3): the whole run, from its first round to this one.
+        started = run["started_at"].replace("T", " ")[:16]
+        lines = [
+            f"{datetime.now(UTC):%Y-%m-%d %H:%M} UTC: {' / '.join(dict.fromkeys(run['statuses']))}"
+            f" (claude-plan run of {run['rounds']} round(s) since {started} UTC)",
+            f"drafts created {run['drafts_created']}, plan calls used {run['calls']} (your Claude "
+            f"plan, no API credits), ${Decimal(run['charged_usd']):.4f} API list-price "
+            "equivalent (not charged)",
+        ]
+        failures, refusals, shelved = run["failures"], run["refusals"], run["shelved"]
+        repairs, notes = run["repairs"], run["notes"]
+    lines += [
+        *(f"needs you: {failure}" for failure in failures),
+        *(f"refused: {line}" for line in refusals),
+        *(f"needs you: draft shelved {line}" for line in shelved),
+        *(f"repair: {line}" for line in repairs),
         *(f"shelved (hidden from review): {sid[:12]}: {'; '.join(why)}" for sid, why in waiting),
-        *(f"note: {note}" for note in result.notes),
+        *(f"note: {note}" for note in notes),
         *(f"post: {message}" for message in posted),
     ]
     try:
@@ -60,12 +80,15 @@ def _tell(config, result, posted: list[str]) -> None:
     # Windows notifications: "Title|Text", or "Title|Text|shipyap://review/<story id>" for a
     # toast whose Review button opens that draft. Python itself never starts a process.
     toasts = []
-    if result.drafts_created and not result.shelved and result.draft_story:
-        count = len({*review_page.waiting(config), result.draft_story})
+    # The plan route (C3) tells of a draft once its fact check and repair have finished
+    # (`checked_story`), not in a round that still waits for them.
+    ready = result.draft_story if result.drafts_created else result.checked_story
+    if ready and not result.shelved and not result.follow_up_pending:
+        count = len({*review_page.waiting(config), ready})
         toasts.append(
             f"Shipyap: {count} draft{'' if count == 1 else 's'} ready to review"
             "|Click Review to open it, then approve or reject."
-            f"|{REVIEW_LINK}{result.draft_story}"
+            f"|{REVIEW_LINK}{ready}"
         )
     toasts += [f"Draft shelved (not shown for review)|{line[:200]}" for line in result.shelved]
     toasts += [f"Shipyap|{message}" for message in posted]
@@ -85,6 +108,29 @@ def _tell(config, result, posted: list[str]) -> None:
         )
     except OSError:
         pass
+
+
+def _factcheck(args, model_factory=None) -> int:
+    """`pros factcheck`: preview (free) or, with --allow-paid, re-run only the fact check of
+    one existing draft. Exit 0 on success; 2 when it could not run."""
+    from shipyap.automation import recheck
+    from shipyap.automation.engine import _ERRORS, _code, _production_model
+
+    try:
+        config = load_config(args.config)
+        prepared = recheck.prepare(config, args.draft)
+        for line in recheck.preview_lines(prepared):
+            print(line)
+        if not args.allow_paid:
+            print("Preview only: nothing was sent. Add --allow-paid to run this one fact check.")
+            return 0
+        done = recheck.run(config, args.draft, model_factory or _production_model)
+    except _ERRORS as exc:
+        print(f"NEEDS_ATTENTION: {_code(exc)}")
+        return 2
+    for line in recheck.result_lines(done):
+        print(line)
+    return 2 if done.error else 0
 
 
 def _eval(parser, args) -> int:
@@ -148,6 +194,8 @@ def _eval(parser, args) -> int:
             print(f"LIVE skipped: no {live_drafts.CONFIG_FILE} in the workspace")
     if not args.check:
         return 0
+    for line in evaluation.known_gaps(report, expected):
+        print(line)
     failures = evaluation.gate_failures(report, expected)
     failures += publication_replay.failures(publications, expected.get("publications", {}))
     if args.workspace is not None:
@@ -158,6 +206,28 @@ def _eval(parser, args) -> int:
         print(f"GATE FAIL {failure}")
     print("GATE PASS" if not failures else f"GATE FAIL ({len(failures)})")
     return 1 if failures else 0
+
+
+def _settings(args) -> int:
+    """`pros settings`: the config as pros itself reads it (TOML quoting, escapes and relative
+    paths resolved), for scripts\\run-and-notify.ps1 and scripts\\model-plan.ps1, which must
+    not parse TOML themselves. Offline; nothing secret is in the config. Exit 2 when invalid."""
+    try:
+        config = load_config(args.config)
+    except _ERRORS as exc:
+        print(f"NEEDS_ATTENTION: {_code(exc)}")
+        return 2
+    values = {
+        "settings_version": "1",
+        "workspace_root": str(config.workspace_root),
+        "provider": config.provider,
+        "model": config.model,
+        "plan_calls_per_day": config.plan_calls_per_day,
+        "plan_timeout_seconds": config.plan_timeout_seconds,
+        "plan_window": config.plan_window,
+    }
+    # ASCII only, so any console code page passes a non-ASCII path through intact.
+    return 0 if _write_stdout("settings", json.dumps(values) + "\n") else 2
 
 
 def _write_stdout(prog: str, text: str) -> bool:
@@ -236,11 +306,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="after raising the Anthropic usage limit, run now instead of waiting for its reset",
     )
+    command.add_argument(
+        "--resume",
+        action="store_true",
+        help="provider claude-plan: continue after scripts\\model-plan.ps1 answered the requests",
+    )
+    settings = subcommands.add_parser(
+        "settings",
+        help="print the resolved settings the PowerShell wrappers need, as JSON (offline)",
+    )
+    settings.add_argument("--config", type=Path, required=True)
     review = subcommands.add_parser(
         "review", help="open the review page with your saved channel and the next free slot"
     )
     review.add_argument("--config", type=Path, required=True)
     review.add_argument("--port", type=int, default=8765)
+    recheck = subcommands.add_parser(
+        "factcheck",
+        help="re-run only the fact check on an existing draft (paid only with --allow-paid)",
+    )
+    recheck.add_argument("--config", type=Path, required=True)
+    recheck.add_argument("--draft", required=True, metavar="STORY_ID", help="8 to 64 hex")
+    recheck.add_argument(
+        "--allow-paid",
+        action="store_true",
+        help="send the one fact-check request; without it, only preview it (free)",
+    )
     evaluate = subcommands.add_parser(
         "eval", help="replay every stored model reply through the current checks (offline)"
     )
@@ -343,6 +434,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _repo(args)
     if args.command == "eval":
         return _eval(parser, args)
+    if args.command == "factcheck":
+        return _factcheck(args)
+    if args.command == "settings":
+        return _settings(args)
     if args.command == "review":
         from shipyap.automation.review import serve
 
@@ -355,6 +450,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             allow_paid=args.allow_paid,
             reexamine=tuple(args.reexamine),
             retry_now=args.retry_now,
+            resume=args.resume,
         )
         if result.statuses == ["STOPPED"]:
             print("STOPPED: remove the STOP file in your workspace to run again. Nothing was done.")
@@ -383,6 +479,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Failures requiring intervention: {len(result.failures)}")
         for failure in result.failures:
             print(f"  {failure}")
+        for line in result.refusals:
+            print(f"  REFUSED {line}")
         for note in result.notes:
             print(f"  NOTE {note}")
         for message in posted:
@@ -391,6 +489,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Review bundle: {draft}")
         print("Drafts are UNAPPROVED; semantic support remains UNKNOWN.")
         print(f"Review: shipyap review --config {args.config}")
+        if config.plan_route:
+            print(
+                "Route: claude-plan (your Claude subscription, no API credits; the dollar "
+                "figures above are API list-price equivalents, not charges)"
+            )
+        if result.summary is not None:
+            run_so_far = result.summary
+            print(
+                f"Whole run so far ({run_so_far['rounds']} round(s)): drafts created "
+                f"{run_so_far['drafts_created']}, plan calls used {run_so_far['calls']}, "
+                f"${Decimal(run_so_far['charged_usd']):.4f} API list-price equivalent"
+            )
+        if result.needs_model:
+            print(
+                f"NEEDS_MODEL: {len(result.needs_model)} request(s) wait in model-outbox; "
+                "scripts\\model-plan.ps1 answers them, then run pros run --resume"
+            )
+            return 3
         return 2 if result.failures else 0
     except _ERRORS as exc:
         print(f"NEEDS_ATTENTION: {_code(exc)}")

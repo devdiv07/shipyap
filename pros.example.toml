@@ -19,6 +19,17 @@ max_new_drafts = 1
 # utc_offset = '+00:00'  # init captures your current machine offset; override with --utc-offset.
 # This is a fixed offset: edit it when your clock/DST changes.
 # weekly_draft_cap = 4                              # paid drafts per week, across repositories
+# voice = "plain"   # drafting prompt p4. "dry-nerdy": prompt p5, short posts (300-800 chars),
+#                    # dry humour only in lines that state no fact; needs author_style_file
+# author_style_file = "author-style.md"   # your tone rules and 1-2 examples, under
+#                    # workspace_root; start from examples/author-style.example.md
+# link_repo = true   # end each post with the repository URL, added by the tool (default: on
+#                    # for voice "dry-nerdy", off for "plain"); it counts toward the length
+# provider = "anthropic-api"  # or "claude-plan": model calls through your Claude subscription
+#                    # with Claude Code (see README, "Use your Claude plan (no API credits)")
+# plan_calls_per_day = 8      # claude-plan only: CLI calls per day on your clock
+# plan_window = ""            # claude-plan only: e.g. "01:00-06:00" (your clock); "" any time
+# plan_timeout_seconds = 300  # claude-plan only: one CLI call, 60 to 1800
 
 # Optional: your own words about each repository, so drafts can say "I" for exactly these
 # statements (and nothing else). Without an entry, drafts for that repository stay third person.
@@ -31,3 +42,5 @@ max_new_drafts = 1
 # learned = []                         # optional: what you learned, in your words
 # do_not_claim = []                    # optional: things a post must never say
 # hashtags = []                        # optional, up to 3, e.g. "#AIAgents"
+# built_by_me = true                   # optional: the closing line says you built it
+#                                      # ("Built-by-me closing:" line in your style file)

@@ -49,6 +49,7 @@ from shipyap.review.service import (
     ReviewDesk,
     ReviewError,
     ReviewErrorCode,
+    parse_rating,
     x_digest,
 )
 from shipyap.review.x_post import XPost
@@ -348,7 +349,7 @@ class _Handler(BaseHTTPRequestHandler):
                 or not _equal(form.get("confirmation", ""), pending.key)
                 or seq != pending.seq
                 or form.get("confirm") != "yes"
-                or set(form)
+                or set(form) - {"rating"}
                 != (
                     {"seq", "confirmation", "confirm", "typed"}
                     if pending.repost_history
@@ -393,6 +394,7 @@ class _Handler(BaseHTTPRequestHandler):
                 x_digest(post),
                 repost_typed=form.get("typed") if pending.repost_history is not None else None,
                 history_sha256=pending.repost_history,
+                rating=parse_rating(form.get("rating")),
             )
             pending.completed_seq = decision.seq
         except _Failure as exc:

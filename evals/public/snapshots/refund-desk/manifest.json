@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "75199b3600ae19bc0d61c3da13a8141f1c7eb0e667b6aa4cb4b9be5599a087c8"
+    },
+    {
+      "path": "api/review.ts",
+      "sha256": "985e0abbe74acd72f42b81839cd241ba2b85ca75d86356b83c5e0975bc8f2547"
+    },
+    {
+      "path": "app/desk.tsx",
+      "sha256": "a6c7041471a3237b179834b821be9e8c92b9a007370b4715d16e8deccaac9beb"
+    }
+  ],
+  "manifest_version": "1",
+  "revision_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "source_url": "https://github.com/sample-owner/refund-desk",
+  "workspace_id": "synthetic_workspace"
+}

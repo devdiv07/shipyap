@@ -1,0 +1,58 @@
+{
+  "response_version": "1",
+  "brief_sha256": "1030c4d35ec1943fd12f0a0fd469ff86e509ea7eb574388c1f0e876550d3463d",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "The notice handler sets noticeSent right after it calls send, without waiting for a result.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 16,
+          "line_end": 19,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "isDone reflects the refund request, so a failed notice would still show as sent.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 7,
+          "line_end": 8,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S03",
+      "text": "A flag set right after calling send describes the request, not the outcome.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 16,
+          "line_end": 19,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": true
+    }
+  ],
+  "verification_needed": []
+}

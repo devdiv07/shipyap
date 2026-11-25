@@ -29,6 +29,7 @@ nothing. Nothing here marks a story offered, approved, scheduled or published; s
 stays UNKNOWN. Commit dates are never read.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -197,6 +198,8 @@ class TargetOutcome:
     schema_rejected: int = 0  # proposed by the model, dropped for breaking the schema
     # Kept findings the normaliser changed, by story key; its review questions are not stored.
     normalised: tuple[tuple[str, Normalised], ...] = ()
+    # (story key, reason code) for each finding the screening refused; never finding text.
+    schema_refusals: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -210,6 +213,18 @@ class GenerationResult:
         return self.discovery.refused + sum(
             len(o.context_refusals) + o.schema_rejected for o in self.outcomes
         )
+
+    def refusals(self) -> tuple[tuple[str, str], ...]:
+        """(story key, reason code) for every refused finding, one per refusal counted in
+        `refused`: screening, then the supplied-context check, then the 06B checks."""
+        found: list[tuple[str, str]] = []
+        for outcome in self.outcomes:
+            found += outcome.schema_refusals
+            found += [
+                (r.story_key, f"{REF_OUTSIDE_SUPPLIED_CONTEXT} {r.detail}")
+                for r in outcome.context_refusals
+            ]
+        return (*found, *discovery_refusals(self.discovery))
 
 
 def plan_story_generation(
@@ -312,13 +327,13 @@ def run_story_generation(
             )
         )
         try:
-            document, schema_rejected, changed = _reply_document(reply, target.context)
+            document, rejected, changed = _reply_document(reply, target.context)
         except (DraftingError, StoryError) as exc:
             raise StoryGenerationFailed(
                 exc, sent=sent, calls=tuple(calls), target=target.context
             ) from None
         kept, refusals = _within_supplied_context(document, target.context)
-        accepted.append((kept, len(document.findings), refusals, schema_rejected, changed))
+        accepted.append((kept, len(document.findings), refusals, rejected, changed))
 
     names = [f"findings-{index:02d}.json" for index in range(1, len(accepted) + 1)]
     files = {
@@ -343,7 +358,17 @@ def run_story_generation(
             exc, sent=sent, calls=tuple(calls), findings_written=True
         ) from None
     outcomes = tuple(
-        TargetOutcome(target.context, call, proposed, refusals, name, recorded, rejected, changed)
+        TargetOutcome(
+            target.context,
+            call,
+            proposed,
+            refusals,
+            name,
+            recorded,
+            len(rejected),
+            changed,
+            rejected,
+        )
         for target, call, (_, proposed, refusals, rejected, changed), name, recorded in zip(
             plan.targets, calls, accepted, names, discovery.snapshots, strict=True
         )
@@ -461,10 +486,10 @@ def screen_candidates(candidates: list[object], context: StoryContext) -> list[S
 
 def _reply_document(
     reply: ModelReply, context: StoryContext
-) -> tuple[FindingsDocument, int, tuple[tuple[str, Normalised], ...]]:
+) -> tuple[FindingsDocument, tuple[tuple[str, str], ...], tuple[tuple[str, Normalised], ...]]:
     """The reply as a 06B findings document for the context's snapshot, the number of proposed
     findings the schema refused, and what the normaliser changed in each kept finding; or a
-    fixed-code refusal. Files supplied to story-discover keep the strict whole-document parse."""
+    fixed-code refusal. Refused findings come as (story key, reason code). Files supplied to story-discover keep the strict whole-document parse."""
     snapshot = context.snapshot
     candidates = reply_candidates(reply)
     screened = screen_candidates(candidates, context)
@@ -489,7 +514,32 @@ def _reply_document(
         for item in kept
         if item.finding is not None and item.normalised.changes
     )
-    return parse_findings(document), len(candidates) - len(kept), changed
+    rejected = tuple(
+        (_refused_key(item.normalised.candidate, index), item.reason or "")
+        for index, item in enumerate(screened, start=1)
+        if item.finding is None
+    )
+    return parse_findings(document), rejected, changed
+
+
+def _refused_key(candidate: object, index: int) -> str:
+    """A refused finding's key for the run summary: the model's key only when it is a plain
+    slug (it may be the very field the schema refused), otherwise its position."""
+    key = candidate.get("story_key") if isinstance(candidate, dict) else None
+    if isinstance(key, str) and re.fullmatch(r"[a-z0-9-]{1,64}", key):
+        return key
+    return f"<finding {index}>"
+
+
+def discovery_refusals(discovery: DiscoveryResult) -> tuple[tuple[str, str], ...]:
+    """(story key, reason code and cited location) for each finding the 06B checks or the
+    backlog refused."""
+    return tuple(
+        (r.story_key, f"{r.refusal}" + (f" {r.detail}" if r.detail else ""))
+        for snapshot in discovery.snapshots
+        for r in snapshot.results
+        if r.refusal is not None
+    )
 
 
 def _within_supplied_context(

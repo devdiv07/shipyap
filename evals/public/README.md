@@ -22,6 +22,8 @@ the dev repository. This directory can be copied and tested without the private 
 | known-hash, hash-aside | A known label is not a number claim; an unsupported aside is removed |
 | missing-scope | Append the evidence's own scope statement verbatim |
 | fixture-repair | Script one narrowing rewrite and re-check through the existing repair loop |
+| p5-plain, p5-code-punchline, p5-author, p5-sarcastic-number, p5-sarcastic-claim, p5-pronoun-claim, p5-labelled | C2b/C2c voice dry-nerdy (label names p5): short drafts that pass; a dry FRAMING line carrying a number, a quoted name, or a code or pronoun subject before an action verb ("It refuses to cut a sentence."), blocks (FRAMING_HAS_CLAIM); a "Takeaway:" line is Must fix |
+| code-control, code-outcome, code-outcome-repair, code-label, code-shared-flag | C1, a fictional refund desk: code-level wording stays reviewable; a requested action stated as a completed record blocks (repair may only narrow it); a label or flag whose value is also set outside the cited lines blocks until a fact check is sent those lines |
 
 Expectations are explicit and checked in. Missing expected cases fail the gate. The private
 release audit scans every byte here for personal markers using its shared policy.

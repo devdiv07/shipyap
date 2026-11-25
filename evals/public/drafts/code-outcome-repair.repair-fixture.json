@@ -1,0 +1,12 @@
+{
+  "fixture": "SYNTHETIC",
+  "about": "Handwritten narrowing to code-level wording; never a live model result.",
+  "replies": [
+    {
+      "stop_reason": "end_turn",
+      "texts": [
+        "{\"rewrites\": [{\"segment_id\": \"S02\", \"text\": \"The call passes the action and the amount to send; these lines do not wait for it.\"}]}"
+      ]
+    }
+  ]
+}

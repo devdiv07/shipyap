@@ -121,7 +121,10 @@ def test_linux_accepts_exactly_the_windows_only_skips(tmp_path):
     assert any(
         "skipped tests.test_evidence_check::test_windows_junction_escape: why" in x for x in lines
     )
-    assert sum(line.startswith("- skipped") for line in lines) == len(guard.WINDOWS_ONLY_TESTS) == 2
+    # 2 evidence-check Windows security tests + 18 plan-route wrapper tests (C3, Windows PowerShell)
+    assert (
+        sum(line.startswith("- skipped") for line in lines) == len(guard.WINDOWS_ONLY_TESTS) == 20
+    )
 
 
 def test_windows_accepts_no_skips(tmp_path):
@@ -133,9 +136,9 @@ def test_each_platform_is_validated_independently(tmp_path):
     on_linux = problems_for(tmp_path, windows, "linux")
     on_windows = problems_for(tmp_path, linux, "win32")
     assert [p for p in on_linux if not p.startswith("Expected skip did not occur")] == []
-    assert len(on_linux) == 2
+    assert len(on_linux) == len(guard.WINDOWS_ONLY_TESTS)
     assert [p for p in on_windows if not p.startswith("Unexpected skip")] == []
-    assert len(on_windows) == 2
+    assert len(on_windows) == len(guard.WINDOWS_ONLY_TESTS)
 
 
 def test_committed_inventory_is_canonical_and_covers_the_mandatory_tests():
@@ -167,8 +170,9 @@ def test_linux_with_symlink_skips_fails_and_reports_missing_windows_skips(tmp_pa
     )
     problems = problems_for(tmp_path, with_outcomes(authentic("linux"), outcomes), "linux")
     assert len([p for p in problems if p.startswith("Unexpected skip")]) == 3
-    assert len([p for p in problems if p.startswith("Expected skip did not occur")]) == 2
-    assert len(problems) == 5
+    windows_only = len(guard.WINDOWS_ONLY_TESTS)
+    assert len([p for p in problems if p.startswith("Expected skip did not occur")]) == windows_only
+    assert len(problems) == 3 + windows_only
 
 
 def test_missing_expected_skip_fails(tmp_path):
@@ -204,7 +208,13 @@ def test_short_name_from_an_unrelated_module_is_rejected(tmp_path):
     problems = problems_for(tmp_path, forged, "linux")
     for _, name in guard.WINDOWS_ONLY_TESTS:
         assert f"Unexpected skip: tests.unrelated::{name}" in problems
-        assert f"Test not in the reviewed inventory: tests.unrelated::{name}" in problems
+    # The inventory problem is a bulk list: at most MAX_LISTED names, then the complete count.
+    names = {f"tests.unrelated::{name}" for _, name in guard.WINDOWS_ONLY_TESTS}
+    prefix = "Test not in the reviewed inventory: "
+    listed = [p.removeprefix(prefix) for p in problems if p.startswith(prefix)]
+    assert set(listed) <= names and len(listed) == min(len(names), guard.MAX_LISTED)
+    if len(names) > guard.MAX_LISTED:
+        assert f"(total {len(names)})" in " ".join(problems)
     for identity in guard.WINDOWS_ONLY_TESTS:
         assert f"Mandatory security test missing: {fmt(identity)}" in problems
 
@@ -213,7 +223,7 @@ def test_duplicate_identities_are_rejected_not_overwritten(tmp_path):
     cases = authentic("linux")
     skips = [c for c in cases if c[2] == SKIPPED]
     problems = problems_for(tmp_path, cases + skips, "linux")
-    assert len(problems) == 2
+    assert len(problems) == len(skips)
     assert all(p.startswith("Duplicate test identity (2 times)") for p in problems)
     passing = [c for c in cases if c[2] == PASSED][0]
     assert has(problems_for(tmp_path, cases + [passing], "linux"), "Duplicate test identity")

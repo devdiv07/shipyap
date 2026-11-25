@@ -10,7 +10,11 @@ The rule (owner's decisions, 2026-11-03):
    NO_LIMITATION_REFERENCE), it is appended verbatim after the opening, as its own paragraph,
    unless the opening already holds it. The opening is as long as fits with it.
 3. The whole text must fit X's 280 weighted characters (`publication.x`); the first sentence that
-   would pass it ends the opening. Opening plus scope line not fitting: nothing.
+   would pass it ends the opening. Opening plus scope line not fitting: X only (C2a), when the
+   scope segment cites a record's own scope statement, the shortest whole sentence of that
+   statement that states a limit (`grounding.scope_sentences`) takes its place, verbatim and
+   citing the same lines, if it is shorter; it goes through every rule here like the original.
+   Still not fitting, or no such sentence: nothing. Nothing is ever cut or rewritten.
 4. It must stand alone: at least MIN_CHARS characters, no list line, the opening not ending with
    a colon and not pointing elsewhere ("below", "the following", ...).
 5. The unchanged free mechanical checks run on the X text as its own draft, with each sentence
@@ -18,13 +22,23 @@ The rule (owner's decisions, 2026-11-03):
    or a superseded-plan sentence means nothing.
 
 Anything that fails gives no X text and one fixed reason. X then gets nothing for that post.
+
+6. The tool's closing line (C2c, `editorial.closing`) is never part of the opening. The X text
+   is built from the post without it, as above; then the closing follows as its own paragraph
+   when the whole still fits 280 and is publishable. Otherwise X keeps that text unchanged.
 """
 
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from shipyap.editorial.grounding import check_draft, render_post, scope_lines
+from shipyap.editorial.grounding import (
+    check_draft,
+    closing_id,
+    render_post,
+    scope_lines,
+    scope_sentences,
+)
 from shipyap.editorial.models import (
     Brief,
     DraftResponse,
@@ -33,6 +47,7 @@ from shipyap.editorial.models import (
     is_tool_item,
 )
 from shipyap.editorial.supersession import Record, check_superseded
+from shipyap.editorial.voice import sentence_ends
 from shipyap.publication.errors import PublicationError
 from shipyap.publication.x import X_MAX_WEIGHT, check_x_text, x_weight
 
@@ -49,11 +64,6 @@ NOT_PUBLISHABLE = "the text is not publishable on X"
 CHECK_BLOCKS = "a mechanical check blocks the X text"
 SUPERSEDED = "a sentence of the X text repeats a plan a later record superseded"
 
-_END = re.compile(r"[.!?][\"'”’)\]]*\s+(?=[\"'“‘(\[]?[A-Z0-9])")
-_ABBREVIATIONS = frozenset(
-    {"e.g", "i.e", "etc", "vs", "cf", "mr", "mrs", "ms", "dr", "no", "fig", "approx", "inc"}
-)
-_INITIALS = re.compile(r"[a-z](?:\.[a-z])*")
 _POINTER = re.compile(
     r"\b(?:below|above|the following|here'?s how|here is how|this list|"
     r"in the comments?|link in (?:the )?comments?)\b",
@@ -69,18 +79,6 @@ class XPost:
     text: str | None
     reason: str = ""
     segment_ids: tuple[str, ...] = ()  # the draft segments its sentences come from
-
-
-def sentence_ends(text: str) -> list[int]:
-    """The end offset of every sentence of `text` (the last is always len(text))."""
-    ends = []
-    for match in _END.finditer(text):
-        word = text[: match.start() + 1].split()[-1]
-        stem = word.strip("\"'“‘(").rstrip(".!?").lower()
-        if text[match.start()] == "." and (stem in _ABBREVIATIONS or _INITIALS.fullmatch(stem)):
-            continue
-        ends.append(match.start() + len(match.group().rstrip()))
-    return [*ends, len(text)]
 
 
 def scope_segment(brief: Brief, response: DraftResponse) -> Segment | None:
@@ -107,16 +105,78 @@ def scope_segment(brief: Brief, response: DraftResponse) -> Segment | None:
     return None
 
 
+def shorter_scope(brief: Brief, scope: Segment | None) -> Segment | None:
+    """X only: `scope` with its text replaced by the shortest whole sentence of the record's own
+    scope statement that states a limit, citing the whole statement as before. None: `scope`
+    cites no record's statement, or no sentence of it is shorter than `scope`."""
+    if scope is None:
+        return None
+    sources = {source.path: source.lines for source in brief.sources}
+    for ref in scope.source_refs:
+        lines = sources.get(ref.path)
+        span = scope_lines(lines) if lines else None
+        if span is None or ref.quote is not None:
+            continue
+        if not (ref.line_start <= span[0] and span[1] <= ref.line_end):
+            continue
+        candidates = [s for s in scope_sentences(lines) if len(s) < len(scope.text)]
+        if candidates:
+            return scope.model_copy(
+                update={"text": min(candidates, key=len), "source_refs": (ref,), "author_refs": ()}
+            )
+    return None
+
+
 def x_post(
     brief: Brief,
     response: DraftResponse,
     records: Sequence[Record] = (),
     brief_sha256: str = "0" * 64,
 ) -> XPost:
+    if not response.segments:
+        return XPost(None, NO_SEGMENTS)
+    closing = response.segments[-1] if closing_id(brief, response) else None
+    if closing is None:
+        return _x_text(brief, response, records, brief_sha256)
+    body = response.model_copy(update={"segments": response.segments[:-1]})
+    post = _x_text(brief, body, records, brief_sha256)
+    if post.text is None:
+        return post
+    # C2c: the tool's repository link follows as its own paragraph when it still fits.
+    linked = f"{post.text}\n\n{closing.text}"
+    try:
+        check_x_text(linked)
+    except PublicationError:
+        return post
+    return XPost(linked, "", (*post.segment_ids, closing.id))
+
+
+def _x_text(
+    brief: Brief, response: DraftResponse, records: Sequence[Record], brief_sha256: str
+) -> XPost:
     segments = response.segments
     if not segments:
         return XPost(None, NO_SEGMENTS)
     scope = scope_segment(brief, response)
+    post = _x_post(brief, response, list(segments), scope, records, brief_sha256)
+    if post.text is None and post.reason == SCOPE_DOES_NOT_FIT:
+        shorter = shorter_scope(brief, scope)
+        if shorter is not None:
+            swapped = [shorter if s is scope else s for s in segments]
+            again = _x_post(brief, response, swapped, shorter, records, brief_sha256)
+            if again.text is not None:
+                return again
+    return post
+
+
+def _x_post(
+    brief: Brief,
+    response: DraftResponse,
+    segments: list[Segment],
+    scope: Segment | None,
+    records: Sequence[Record],
+    brief_sha256: str,
+) -> XPost:
     # Units in post order: (segment index, end offset in its text). The scope segment is one
     # unit: it is only ever taken whole.
     units = [

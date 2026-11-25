@@ -18,6 +18,7 @@ from typing import Any
 
 from shipyap.editorial.errors import EditorialError, EditorialErrorCode
 from shipyap.editorial.models import Basis, GeneratorKind, Outcome
+from shipyap.editorial.voice import is_dry_nerdy, version_of  # noqa: F401 (re-exported)
 from shipyap.evidence.report import canonical_json
 
 PROMPT_VERSION = "p1"
@@ -144,8 +145,130 @@ one, and do not widen one setting's result into a rule.
 )
 
 
+# p5 (C2b): voice = "dry-nerdy". The evidence rules are p4's, word for word; what changes is the
+# shape (short, no labelled sections), the length (300 to 800), FRAMING for the one dry line, and
+# the owner's own style file appended at the end. voice = "plain" keeps p4 above, byte for byte.
+DRY_NERDY_PROMPT_VERSION = "p5"
+FORMATS = ("plain", "code-punchline")
+_P5_HEAD = """
+House style for this post (binding, on top of the brief; prompt p5, voice dry-nerdy):
+"""
+_P5_LENGTH = "- Length: 300 to 800 characters in total."
+_P5_SHAPE = """\
+- Length: 300 to 800 characters in total. Short beats complete: leave out what the story does \
+not need.
+- Shape: what happened, then what was wrong, then what got fixed, then one dry closing line. \
+Short sentences of varied length, in 2 to 4 short paragraphs. Open with the concrete thing \
+itself in the first sentence: no setup, no rhetorical question, no announcement.
+- Never use labelled sections or report structure: no line opening with "Cause:", "Impact:", \
+"Fix:", "Lesson:", "Takeaway:", "TL;DR" or any other label and a colon, no headers, no bullet or \
+numbered lists, no incident-report voice. The draft is blocked if it has any of them.
+- Basis FRAMING, with no references, is for a sentence that makes no factual claim: the dry \
+closing line, a short aside, a transition. Dry humour, irony and sarcasm go only in FRAMING. A \
+FRAMING sentence never contains a number, a quoted string, a file, function or code name, or a \
+statement of what the code, the tool or the repository does, did or measured; one that does is \
+blocked (FRAMING_HAS_CLAIM). Every factual sentence is SOURCE, AUTHOR or INTERPRETATION and \
+cites its lines, exactly as below.
+- Never invent an anecdote: no moment, reaction, conversation, person or event that neither the \
+cited lines nor the author's own items state. Use "I" only for what the contributor's own items \
+state, and cite those items; everything else comes from the cited lines.
+- The insight and why_it_matters items are an unverified angle, not the contributor's words. \
+Basis AUTHOR only for a segment that cites attempted or learned items; a takeaway built on the \
+angle is INTERPRETATION and cites the source lines that support it.
+- The limitations items describe where this brief came from (backlog, revision, evidence roles, \
+rules) for the reviewer. Never cite them and never repeat or paraphrase them in the post. Never \
+mention the backlog, the brief, the snapshot, semantic support or verification status. A post \
+states its scope with the cited record's own scope lines.
+- When a cited record states its own scope or limits near its top ("evidence only", "says \
+nothing about ..."), include that statement in its own short sentence, in its own plain words, \
+and cite exactly those lines, without a quote.
+"""
+# p4's evidence rules from "The brief's limitations list each source file's role" to the end,
+# unchanged (the shape, voice and length rules above replace p4's own).
+_P4_EVIDENCE_RULES = STORY_SYSTEM_PROMPT[
+    STORY_SYSTEM_PROMPT.index("- The brief's limitations list each source file's role.") :
+]
+_FORMAT_RULES = {
+    "plain": "Format for this post: plain. The shape above, nothing more.\n",
+    "code-punchline": (
+        "Format for this post: code-punchline. The first segment is exactly one line of code "
+        "copied verbatim from a CODE file the story turns on: basis SOURCE, citing that one "
+        "line, with the whole line as its quote and nothing else in the segment. Then the "
+        "plain shape, same tone. If no single code line in the sources carries the story, "
+        "write the plain shape instead.\n"
+    ),
+}
+_STYLE_HEAD = (
+    "\nThe author's style file follows (the owner's own tone rules and examples). It sets tone "
+    "and rhythm only. Its examples are about other posts: never take a fact, a number, a name or "
+    "a sentence from them, never cite them, and where they conflict with any rule above, the "
+    "rule above wins.\n<<<AUTHOR STYLE\n"
+)
+_STYLE_TAIL = "\nAUTHOR STYLE>>>\n"
+MAX_STYLE_CHARS = 6000
+
+
+def p5_body_limit(closing: str | None) -> int:
+    """C2c: the characters a p5 post's own text may use, so that the text plus the tool's
+    closing line (`editorial.closing`: its own paragraph, two newlines before it) stays within
+    LENGTH_P5's 800. Without a closing line, 800."""
+    if not closing:
+        return LENGTH_P5[1]
+    return LENGTH_P5[1] - len(closing) - 2
+
+
+def _length_rule(closing: str | None) -> str:
+    if not closing:
+        return _P5_LENGTH
+    return (
+        f"- Length: 300 to {p5_body_limit(closing)} characters for what you write. After your "
+        f"last segment the tool adds one closing line of its own, the repository link "
+        f"({len(closing)} characters, after a blank line), so the whole post stays within 800. "
+        "Never write that link or a closing link line yourself."
+    )
+
+
+def story_system_prompt(
+    voice: str = "plain", style: str = "", post_format: str = "plain", closing: str | None = None
+) -> str:
+    """The system prompt for a story draft. "plain": p4, byte for byte (`style`, `post_format`
+    and `closing` are ignored). "dry-nerdy": p5 with `post_format` and the owner's style file;
+    with `closing` (the tool's closing line) the length rule gives the post's own text the
+    budget `p5_body_limit`. Without one, p5 is byte for byte what C2b sent."""
+    if voice == "plain":
+        return STORY_SYSTEM_PROMPT
+    if voice != "dry-nerdy" or post_format not in FORMATS:
+        raise ValueError("unknown voice or format")
+    if not style.strip() or len(style) > MAX_STYLE_CHARS:
+        raise ValueError("a dry-nerdy draft needs the author's style file (1 to 6,000 characters)")
+    return (
+        SYSTEM_PROMPT
+        + _P5_HEAD
+        + _P5_SHAPE.replace(_P5_LENGTH, _length_rule(closing), 1)
+        + _P4_EVIDENCE_RULES
+        + _FORMAT_RULES[post_format]
+        + _STYLE_HEAD
+        + style.strip()
+        + _STYLE_TAIL
+    )
+
+
 def prompt_version(system_prompt: str) -> str:
-    return STORY_PROMPT_VERSION if system_prompt == STORY_SYSTEM_PROMPT else PROMPT_VERSION
+    if system_prompt == STORY_SYSTEM_PROMPT:
+        return STORY_PROMPT_VERSION
+    if system_prompt.startswith(SYSTEM_PROMPT + _P5_HEAD):
+        return DRY_NERDY_PROMPT_VERSION
+    return PROMPT_VERSION
+
+
+# The post length the free repair keeps a draft within: (floor, ceiling) in characters. Under the
+# floor after a dropped sentence the draft is shelved; a scope line is never added past the ceiling.
+LENGTH_P4 = (800, 1300)
+LENGTH_P5 = (300, 800)
+
+
+def length_range(label: str) -> tuple[int, int]:
+    return LENGTH_P5 if is_dry_nerdy(label) else LENGTH_P4
 
 
 def absolute_phrases(text: str) -> tuple[str, ...]:

@@ -175,15 +175,23 @@ class State:
                 "INSERT OR REPLACE INTO provider_hold VALUES (?, ?, ?)", (code, until, since)
             )
 
-    def holding(self, now: str):
-        """The active hold row, if any; expired holds are removed."""
+    def holding(self, now: str, *, plan: bool = False):
+        """The active hold row, if any; expired holds are removed. `plan`: the plan route's
+        holds (codes PLAN_*), else the API route's; one route's hold never stops the other."""
         with self.db:
             self.db.execute("DELETE FROM provider_hold WHERE until <= ?", (now,))
-        return self.db.execute("SELECT * FROM provider_hold ORDER BY until DESC").fetchone()
+        where = "code LIKE 'PLAN\\_%' ESCAPE '\\'"
+        return self.db.execute(
+            f"SELECT * FROM provider_hold WHERE {'' if plan else 'NOT '}{where} ORDER BY until DESC"
+        ).fetchone()
 
-    def release(self) -> None:
+    def release(self, *, plan: bool = False) -> None:
+        """Every hold, or with `plan` only the plan route's."""
         with self.db:
-            self.db.execute("DELETE FROM provider_hold")
+            if plan:
+                self.db.execute("DELETE FROM provider_hold WHERE code LIKE 'PLAN\\_%' ESCAPE '\\'")
+            else:
+                self.db.execute("DELETE FROM provider_hold")
 
     def failed(self, repo, revision):
         with self.db:

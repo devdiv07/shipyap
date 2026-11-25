@@ -77,6 +77,82 @@
       "response": "drafts/fixture-repair.response.json",
       "fact_check": "drafts/fixture-repair.fact-check.json",
       "repair_fixture": "drafts/fixture-repair.repair-fixture.json"
+    },
+    {
+      "name": "code-control",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/code-control.response.json",
+      "control": true
+    },
+    {
+      "name": "code-outcome",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/code-outcome.response.json"
+    },
+    {
+      "name": "code-outcome-repair",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/code-outcome-repair.response.json",
+      "repair_fixture": "drafts/code-outcome-repair.repair-fixture.json"
+    },
+    {
+      "name": "code-label",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/code-label.response.json"
+    },
+    {
+      "name": "code-shared-flag",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/code-shared-flag.response.json"
+    },
+    {
+      "name": "code-substring-label",
+      "brief": "drafts/score.brief.json",
+      "response": "drafts/substring-label.response.json"
+    },
+    {
+      "name": "code-substring-label-overstated",
+      "brief": "drafts/score.brief.json",
+      "response": "drafts/substring-label.response.json",
+      "fact_check": "drafts/substring-label.fact-check.json"
+    },
+    {
+      "name": "p5-plain",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-plain.response.json",
+      "control": true
+    },
+    {
+      "name": "p5-code-punchline",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-code-punchline.response.json",
+      "control": true
+    },
+    {
+      "name": "p5-author",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-author.response.json",
+      "control": true
+    },
+    {
+      "name": "p5-sarcastic-number",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-sarcastic-number.response.json"
+    },
+    {
+      "name": "p5-sarcastic-claim",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-sarcastic-claim.response.json"
+    },
+    {
+      "name": "p5-pronoun-claim",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-pronoun-claim.response.json"
+    },
+    {
+      "name": "p5-labelled",
+      "brief": "drafts/refund.brief.json",
+      "response": "drafts/p5-labelled.response.json"
     }
   ]
 }

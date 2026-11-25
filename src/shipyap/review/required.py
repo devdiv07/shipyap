@@ -23,8 +23,9 @@ from dataclasses import dataclass
 
 from shipyap.automation.factcheck import VERDICTS
 from shipyap.automation.repair import DROPPABLE, _drop_aside, _scope_segment
+from shipyap.editorial.closing import is_closing
 from shipyap.editorial.grounding import hex_ids
-from shipyap.editorial.models import AssertionMap, Brief, DraftResponse, Severity
+from shipyap.editorial.models import AssertionMap, Brief, DraftResponse, FindingCode, Severity
 
 COMPLETE = "COMPLETE"
 INHERITED = "INHERITED"
@@ -48,6 +49,8 @@ def completed_fact_check(check, response) -> bool:
     if not isinstance(check, dict) or not isinstance(check.get("verdicts"), list):
         return False
     segments = {segment.id for segment in response.segments}
+    if response.segments and is_closing(response.segments[-1]):
+        segments.discard(response.segments[-1].id)  # the tool's link line is never fact-checked
     if not segments:
         return False
     found = set()
@@ -145,9 +148,13 @@ def inherited_fact_check(
     verdicts: list[dict] = []
     basis: dict[str, str] = {}
 
+    closing = repaired.segments[-1] if is_closing(repaired.segments[-1]) else None
     for segment in repaired.segments:
         sid = segment.id
         old = before.get(sid)
+        if segment is closing and (old is None or old.text == segment.text):
+            basis[sid] = "the tool's repository link; not a checked sentence"
+            continue
         if sid in final and final[sid] and final[sid] == segment.text:
             if sid not in rechecked:
                 return None  # rewritten by a model with no re-check of its own
@@ -190,7 +197,11 @@ def inherited_fact_check(
             for f in (record_findings.findings if record_findings else ())
             if f.severity == Severity.BLOCKING
         }
-        if old.source_refs or not codes or not codes <= DROPPABLE:
+        # A dry FRAMING line (no references) the repair removed after its one trim (C2c).
+        droppable = DROPPABLE
+        if old.basis == "FRAMING":
+            droppable = DROPPABLE | {FindingCode.FRAMING_HAS_CLAIM}
+        if old.source_refs or not codes or not codes <= droppable:
             return None
     document = {
         "draft": repaired_name,

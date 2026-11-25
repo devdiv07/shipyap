@@ -53,6 +53,10 @@ class DraftingErrorCode(StrEnum):
     MODEL_REFUSED = "MODEL_REFUSED"
     MODEL_TRUNCATED = "MODEL_TRUNCATED"
     MODEL_REPLY_MALFORMED = "MODEL_REPLY_MALFORMED"
+    # The plan route (C3): Claude Code in print mode, through the owner's subscription.
+    PLAN_SIGNIN_REQUIRED = "PLAN_SIGNIN_REQUIRED"
+    PLAN_NOT_SUBSCRIPTION = "PLAN_NOT_SUBSCRIPTION"
+    PLAN_USAGE_LIMIT = "PLAN_USAGE_LIMIT"
 
 
 MESSAGES: dict[DraftingErrorCode, str] = {
@@ -99,6 +103,14 @@ MESSAGES: dict[DraftingErrorCode, str] = {
     DraftingErrorCode.MODEL_REPLY_MALFORMED: (
         "the model reply did not consist of exactly one complete text answer"
     ),
+    DraftingErrorCode.PLAN_SIGNIN_REQUIRED: "Sign in to Claude Code (run `claude` once)",
+    DraftingErrorCode.PLAN_NOT_SUBSCRIPTION: (
+        "Claude Code is not signed in with a Claude subscription (an API key or key helper is "
+        "in use), so the plan route sent nothing"
+    ),
+    DraftingErrorCode.PLAN_USAGE_LIMIT: (
+        "the usage limit of your Claude plan is reached; the request was refused"
+    ),
 }
 
 
@@ -137,9 +149,14 @@ class DraftingError(Exception):
 
     def owner_message(self, *, drafted: bool = False) -> str:
         """Plain words for the run report and the notification. Only a usage limit has them."""
+        resets = f" (resets {self.resets_at:%Y-%m-%d %H:%M} UTC)" if self.resets_at else ""
+        if self.code == DraftingErrorCode.PLAN_USAGE_LIMIT:
+            return (
+                f"Your Claude plan usage limit is reached{resets}. Shipyap sends nothing until "
+                "then (or run pros run --retry-now). No API credits are used."
+            )
         if self.code != DraftingErrorCode.PROVIDER_USAGE_LIMIT:
             return MESSAGES[self.code]
-        resets = f" (resets {self.resets_at:%Y-%m-%d %H:%M} UTC)" if self.resets_at else ""
         # A refused request is not processed, so it is not billed.
         outcome = (
             "The draft was made; the later request was refused and not charged."

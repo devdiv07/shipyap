@@ -116,6 +116,133 @@
         },
         "fact_check": "REQUIRED"
       }
+    },
+    "code-control": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true
+    },
+    "code-outcome": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_OUTCOME_UNSUPPORTED"
+      },
+      "unblocked": [
+        "S01",
+        "S03"
+      ],
+      "repair": {
+        "status": "SHELVED",
+        "approvable": false
+      }
+    },
+    "code-outcome-repair": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_OUTCOME_UNSUPPORTED"
+      },
+      "repair": {
+        "status": "CLEAN",
+        "approvable": true,
+        "max_model_rounds": 1,
+        "texts": {
+          "S02": "The call passes the action and the amount to send; these lines do not wait for it."
+        },
+        "fact_check": "REQUIRED"
+      }
+    },
+    "code-label": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_MEANING_INCOMPLETE"
+      },
+      "unblocked": [
+        "S01"
+      ]
+    },
+    "code-shared-flag": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_MEANING_INCOMPLETE",
+        "S03": "CODE_MEANING_INCOMPLETE"
+      },
+      "unblocked": [
+        "S01"
+      ]
+    },
+    "code-substring-label": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_MEANING_INCOMPLETE"
+      },
+      "unblocked": [
+        "S01"
+      ]
+    },
+    "code-substring-label-overstated": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S02": "CODE_MEANING_INCOMPLETE"
+      },
+      "unblocked": [
+        "S01"
+      ]
+    },
+    "p5-plain": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true,
+      "unblocked": [
+        "S05"
+      ]
+    },
+    "p5-code-punchline": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true,
+      "unblocked": [
+        "S01",
+        "S05"
+      ]
+    },
+    "p5-author": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": true,
+      "unblocked": [
+        "S01",
+        "S05"
+      ]
+    },
+    "p5-sarcastic-number": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S05": "FRAMING_HAS_CLAIM"
+      }
+    },
+    "p5-sarcastic-claim": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S05": "FRAMING_HAS_CLAIM"
+      }
+    },
+    "p5-pronoun-claim": {
+      "status": "NEEDS_REVISION",
+      "approvable": false,
+      "blocked": {
+        "S05": "FRAMING_HAS_CLAIM"
+      }
+    },
+    "p5-labelled": {
+      "status": "READY_FOR_REVIEW",
+      "approvable": false,
+      "blocked": {
+        "S04": "LABELLED_SECTION"
+      }
     }
   },
   "max_false_alarms": 0,

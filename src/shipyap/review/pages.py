@@ -762,6 +762,7 @@ def _approve_section(item, token, view, defaults=None, gate=None) -> str:
             f"<h3>X (same slot, after LinkedIn)</h3>{_x_text(x_post)}"
             f"<form method=post action=/story/{sid}/approve#approve>{_hidden(token, item.seq)}"
             f"<input type=hidden name=confirmation value={_q(view.confirmation)}>"
+            + _rating_choice()
             + (
                 f"<p>Type exactly: <b>{e(repost_phrase(item.story.story_id, sheet))}</b></p>"
                 '<input type=text name=typed autocomplete=off aria-label="repost phrase">'
@@ -787,6 +788,18 @@ def _approve_section(item, token, view, defaults=None, gate=None) -> str:
         f"<label>Target time (UTC)<input type=text name=due_at value={_q(due)} autocomplete=off></label>"
         f"<p>{e(defaults.local if defaults else 'Choose the destination and a future time.')}</p></details>"
         f"<button>{'Review repost' if repeat else 'Approve'}</button><p class=muted>Recording your decision sends nothing.</p></form>"
+    )
+
+
+def _rating_choice() -> str:
+    """The optional "would I post this proudly" rating on the approval sheet (C2a). Saved with
+    the decision's eval case; leaving it out changes nothing."""
+    options = "".join(
+        f"<label><input type=radio name=rating value={n}> {n}</label> " for n in range(1, 6)
+    )
+    return (
+        "<fieldset class=rating><legend>Would I post this proudly? 1 (no) to 5 (yes), "
+        f"optional</legend>{options}</fieldset>"
     )
 
 

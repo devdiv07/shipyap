@@ -1,0 +1,43 @@
+{
+  "response_version": "1",
+  "brief_sha256": "1030c4d35ec1943fd12f0a0fd469ff86e509ea7eb574388c1f0e876550d3463d",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "On a parse error the review route falls back to ruleCheck.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "api/review.ts",
+          "line_start": 11,
+          "line_end": 15,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "The badge shows Model Review or Rule Check from the source field, so a reader can see which path produced the score.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 31,
+          "line_end": 33,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    }
+  ],
+  "verification_needed": []
+}

@@ -1,0 +1,39 @@
+{
+  "api_version": "2022-11-28",
+  "files": [
+    {
+      "git_blob_sha1": "264034587a37d17d5d4bd1f4df76e19b79ac66a5",
+      "git_mode": "100644",
+      "path": "README.md",
+      "sha256": "1d6c398bc687d8f81d71481a5b81c950633b3885c8cb298f5020b770c2890900",
+      "size": 68
+    },
+    {
+      "git_blob_sha1": "53f061085c0777f819dc17c391a7c244debfa8c7",
+      "git_mode": "100644",
+      "path": "api/score.ts",
+      "sha256": "e98c39918fe0dfcc0fd5f4a0366503bd7c3c0bcbba5c5828fbdb466f27ad33f1",
+      "size": 555
+    },
+    {
+      "git_blob_sha1": "494c8751ff47a1176c8d6917da6d89b97868e46b",
+      "git_mode": "100644",
+      "path": "app/panel.tsx",
+      "sha256": "a26b29f32d8464cd0caeb0ff43dad65c80d3b802632ee5c0f693bf2084c3a946",
+      "size": 496
+    }
+  ],
+  "manifest_sha256": "a69b05996c547fecfce937d0e4bfcbbde9d45917765e6264f885f1107961022a",
+  "notices": [
+    "COMPLETE means the files listed here were written and re-verified against this record. It is not an authenticated attestation: anyone who can write this directory can forge it.",
+    "File bytes were hashed independently. Tree listings are provider-supplied metadata; complete tree membership is not independently proven.",
+    "This is not scientific verification, claim approval or publication readiness."
+  ],
+  "record_version": "1",
+  "retrieval_mode": "github-rest-git-data",
+  "revision_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_url": "https://github.com/sample-owner/score-panel",
+  "status": "COMPLETE",
+  "tree_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "workspace_id": "synthetic_workspace"
+}

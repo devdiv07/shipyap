@@ -224,6 +224,7 @@ class ReviewErrorCode(StrEnum):
     APPROVAL_BLOCKED = "APPROVAL_BLOCKED"
     STALE_DRAFT = "STALE_DRAFT"
     EVAL_CASE_NOT_SAVED = "EVAL_CASE_NOT_SAVED"
+    RATING_INVALID = "RATING_INVALID"
 
 
 MESSAGES: dict[ReviewErrorCode, str] = {
@@ -265,7 +266,19 @@ MESSAGES: dict[ReviewErrorCode, str] = {
     ReviewErrorCode.EVAL_CASE_NOT_SAVED: (
         "the decision was recorded, but its eval case file could not be written"
     ),
+    ReviewErrorCode.RATING_INVALID: "the rating must be a whole number from 1 to 5, or left out",
 }
+
+RATINGS = (1, 2, 3, 4, 5)  # "would I post this proudly", optional at Approve (C2a)
+
+
+def parse_rating(value: str | None) -> int | None:
+    """The approval form's optional rating: absent or "" is None; "1" to "5" is that number."""
+    if value is None or value == "":
+        return None
+    if value not in {str(r) for r in RATINGS}:
+        raise ReviewError(ReviewErrorCode.RATING_INVALID)
+    return int(value)
 
 
 class ReviewError(Exception):
@@ -702,9 +715,14 @@ class ReviewDesk:
         *,
         repost_typed: str | None = None,
         history_sha256: str | None = None,
+        rating: int | None = None,
     ) -> tuple[Approval, ReviewDecision]:
         """`x_seen` is the `x_digest` of the X text on the sheet the owner approved from; with an
-        X channel configured it must match the X text the draft gives now."""
+        X channel configured it must match the X text the draft gives now. `rating`: the owner's
+        optional 1-5 "would I post this proudly", saved in the decision's eval case only; it
+        never changes the approval."""
+        if rating is not None and (type(rating) is not int or rating not in RATINGS):
+            raise ReviewError(ReviewErrorCode.RATING_INVALID)
         item = self.item(story_id)
         if item.stale:
             raise ReviewError(ReviewErrorCode.STALE_DRAFT)
@@ -724,7 +742,7 @@ class ReviewDesk:
                 repost_typed=repost_typed,
                 history_sha256=history_sha256,
             )
-        self._save_case(item, decision, item.current, item.current)
+        self._save_case(item, decision, item.current, item.current, rating)
         return approval, decision
 
     def reject(self, story_id: str, typed: str, expected_seq: int, now: datetime) -> ReviewDecision:
@@ -832,7 +850,12 @@ class ReviewDesk:
             raise ReviewError(ReviewErrorCode.APPROVAL_BLOCKED, gate.reasons())
 
     def _save_case(
-        self, item: ReviewItem, decision: ReviewDecision, before: Draft, after: Draft
+        self,
+        item: ReviewItem,
+        decision: ReviewDecision,
+        before: Draft,
+        after: Draft,
+        rating: int | None = None,
     ) -> None:
         """One eval case for one recorded decision: what the owner saw (`before`, with its gate)
         and what they decided (`after`: the saved edit, or the same draft)."""
@@ -872,6 +895,8 @@ class ReviewDesk:
                 for segment in before.response.segments
             ],
         }
+        if rating is not None:
+            case["rating"] = rating
         name = f"{item.story.story_id[:16]}-{decision.seq:04d}-{decision.decision.value}.json"
         try:
             self.eval_cases.mkdir(parents=True, exist_ok=True)

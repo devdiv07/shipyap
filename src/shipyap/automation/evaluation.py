@@ -58,7 +58,7 @@ from shipyap.editorial.models import Severity
 from shipyap.editorial.sources import VerifiedSnapshot, load_verified_snapshot
 from shipyap.editorial.supersession import Record, check_superseded
 from shipyap.preferences.repositories import Mode
-from shipyap.review.gate import judge
+from shipyap.review.gate import is_style, judge
 from shipyap.stories.errors import StoryError
 from shipyap.stories.findings import StoryFinding, check_finding, snapshot_labels
 
@@ -106,6 +106,7 @@ class DecisionCase:
     segments: int
     edited: int
     approvable_before: bool
+    rating: int | None = None  # the owner's optional 1-5 "would I post this proudly" (C2a)
 
 
 @dataclass(frozen=True)
@@ -180,6 +181,7 @@ class DraftReport:
     repair: RepairReport | None = None
     repaired: tuple[str, ...] = ()  # what checked_input changed before the parser
     known_gap: str = ""
+    style: tuple[str, ...] = ()  # voice and readability warnings (C2a), "S01 CODE detail"
 
     @property
     def false_alarms(self) -> int:
@@ -264,6 +266,7 @@ def load_decisions(workspace: Path) -> list[DecisionCase]:
                 segments=len(segments),
                 edited=sum(bool(s.get("edited")) for s in segments if isinstance(s, dict)),
                 approvable_before=value.get("approvable_before") is True,
+                rating=_rating(value.get("rating")),
             )
         )
     return cases
@@ -432,14 +435,32 @@ def numbers_outside_quote(finding: StoryFinding, snapshot: VerifiedSnapshot) -> 
     return tuple(dict.fromkeys(token for token in claimed if token not in held))
 
 
+def _closed(data: bytes, brief) -> bytes:
+    """A p5 (voice dry-nerdy) reply gets the closing line a run adds by default (C2c: the
+    repository link, link_repo on, no built_by_me); every other reply is unchanged."""
+    from shipyap.editorial.closing import add_closing
+    from shipyap.editorial.models import MAX_SEGMENTS
+    from shipyap.editorial.voice import is_dry_nerdy
+
+    try:
+        label = parse_response(data).generator.label
+    except EditorialError:
+        return data
+    if not is_dry_nerdy(label):
+        return data
+    url = brief.snapshot.source_url
+    return add_closing(data, url, url, MAX_SEGMENTS)
+
+
 def replay_draft(case: DraftCase) -> DraftReport:
     try:
         brief = parse_brief(case.brief)
         checked = checked_input(case.response, brief)  # exactly what a run builds the draft from
-        response = parse_response(checked.data)
+        data = _closed(checked.data, brief)
+        response = parse_response(data)
     except EditorialError as exc:
         return DraftReport(case.name, "UNREADABLE", (), error=str(exc.code))
-    amap = check_draft(brief, response, _sha256(case.brief), _sha256(checked.data))
+    amap = check_draft(brief, response, _sha256(case.brief), _sha256(data))
     segments = tuple(
         SegmentResult(
             segment.id,
@@ -487,7 +508,25 @@ def replay_draft(case: DraftCase) -> DraftReport:
         repair=replay_repair(case, brief, response),
         repaired=checked.changes,
         known_gap=case.known_gap,
+        style=style_lines(gate),
     )
+
+
+def style_lines(gate) -> tuple[str, ...]:
+    """The gate's voice and readability notes, one "S01 CODE detail" (or "post ...") each."""
+    return tuple(
+        f"{where} {note.code} {note.detail}".rstrip()
+        for where, notes in (
+            *((s.segment_id, s.warnings) for s in gate.segments),
+            ("post", gate.document_warnings),
+        )
+        for note in notes
+        if is_style(note)
+    )
+
+
+def _rating(value: object) -> int | None:
+    return value if type(value) is int and 1 <= value <= 5 else None
 
 
 class FixtureDrafter:
@@ -637,6 +676,25 @@ def gate_failures(report: EvalReport, expected: dict) -> list[str]:
     return failures
 
 
+def known_gaps(report: EvalReport, expected: dict) -> list[str]:
+    """Sentences pinned as KNOWN GAP (`known_gaps` in a draft's pin): a defect the checks are
+    known not to catch. Reported, with whether anything blocks the sentence now, and never a gate
+    failure; a later fix that blocks one shows here before its pin moves to `blocked`."""
+    lines = []
+    drafts = {draft.name: draft for draft in report.drafts}
+    for name, want in expected.get("drafts", {}).items():
+        draft = drafts.get(name)
+        if draft is None:
+            continue
+        gates = {g.segment_id: g for g in draft.gate}
+        for segment_id, why in (want.get("known_gaps") or {}).items():
+            gate = gates.get(segment_id)
+            codes = sorted({note.split(" ", 1)[0] for note in gate.blocks}) if gate else []
+            state = f"blocked by {', '.join(codes)}" if codes else "not blocked"
+            lines.append(f"KNOWN GAP {name} {segment_id} (reported, not gated): {state}; {why}")
+    return lines
+
+
 def _repair_failures(draft: DraftReport, want: dict | None) -> list[str]:
     if not want:
         return []
@@ -723,6 +781,9 @@ def render(report: EvalReport) -> list[str]:
                 for note in gate.warnings
                 if note.startswith(("FACT_CHECK_", "NOT_RECHECKED", "FIRST_PERSON"))
             ]
+        if draft.style:
+            lines.append(f"  STYLE warnings={len(draft.style)}")
+            lines += [f"    STYLE {_shown(line)}" for line in draft.style]
         if draft.repair is not None and draft.repair.status != auto_repair.NOT_NEEDED:
             fix = draft.repair
             source = "fixture replies, not a model" if fix.fixture else "no model"
@@ -745,6 +806,7 @@ def render(report: EvalReport) -> list[str]:
         lines.append(
             f"DECISION {decision.name}: {decision.decision} segments={decision.segments} "
             f"edited={decision.edited} approvable_before={decision.approvable_before}"
+            + (f" rating={decision.rating}/5" if decision.rating is not None else "")
         )
     stories = [s for s in report.stories if not s.reply_error]
     lines.append(

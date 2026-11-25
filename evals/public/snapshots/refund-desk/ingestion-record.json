@@ -1,0 +1,39 @@
+{
+  "api_version": "2022-11-28",
+  "files": [
+    {
+      "git_blob_sha1": "035bd6beaebe78ac6c6d847d685734c3a140a4cf",
+      "git_mode": "100644",
+      "path": "README.md",
+      "sha256": "75199b3600ae19bc0d61c3da13a8141f1c7eb0e667b6aa4cb4b9be5599a087c8",
+      "size": 67
+    },
+    {
+      "git_blob_sha1": "4cd2afafe2eca0fe12dd5e79f856ff1faf048b8d",
+      "git_mode": "100644",
+      "path": "api/review.ts",
+      "sha256": "985e0abbe74acd72f42b81839cd241ba2b85ca75d86356b83c5e0975bc8f2547",
+      "size": 468
+    },
+    {
+      "git_blob_sha1": "545fa8bd65cb2116c9a7b364dd4923d1ae68cffd",
+      "git_mode": "100644",
+      "path": "app/desk.tsx",
+      "sha256": "a6c7041471a3237b179834b821be9e8c92b9a007370b4715d16e8deccaac9beb",
+      "size": 1068
+    }
+  ],
+  "manifest_sha256": "1b9720e91f5ba6a092b1c11862fd020fe36d91118c2bffeaa29a110a86e279af",
+  "notices": [
+    "COMPLETE means the files listed here were written and re-verified against this record. It is not an authenticated attestation: anyone who can write this directory can forge it.",
+    "File bytes were hashed independently. Tree listings are provider-supplied metadata; complete tree membership is not independently proven.",
+    "This is not scientific verification, claim approval or publication readiness."
+  ],
+  "record_version": "1",
+  "retrieval_mode": "github-rest-git-data",
+  "revision_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "source_url": "https://github.com/sample-owner/refund-desk",
+  "status": "COMPLETE",
+  "tree_sha": "ffffffffffffffffffffffffffffffffffffffff",
+  "workspace_id": "synthetic_workspace"
+}

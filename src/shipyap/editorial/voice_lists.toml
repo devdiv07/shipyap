@@ -1,0 +1,160 @@
+# Word lists for the voice and readability warnings (`editorial.voice`). Warnings only: nothing
+# here ever blocks Approve. To extend a check, add an entry to its list; matching is
+# case-insensitive on whole words, and a phrase matches across any run of spaces.
+
+# Cliché openers and phrases (VOICE_CLICHE). Matched anywhere in a sentence.
+cliches = [
+    "what surprised me",
+    "here's the thing",
+    "here is the thing",
+    "let's talk about",
+    "let's dive in",
+    "let's unpack",
+    "ever wondered",
+    "have you ever wondered",
+    "game-changer",
+    "game changer",
+    "game-changing",
+    "i'm excited to share",
+    "i am excited to share",
+    "excited to announce",
+    "thrilled to share",
+    "in today's fast-paced",
+    "in today's world",
+    "in the world of",
+    "buckle up",
+    "spoiler alert",
+    "the secret sauce",
+    "a deep dive",
+    "it turns out",
+    "plot twist",
+    "hot take",
+    "level up",
+    "move the needle",
+    "stay tuned",
+]
+
+# Emoji counted as clichés wherever they appear (VOICE_CLICHE).
+cliche_emoji = ["🚀", "🔥", "💡", "🎯", "✨", "🙌", "💯", "👇", "🤯"]
+
+# Words that make a post read as AI-written (VOICE_AI_WORD). Each entry also matches its plain
+# inflections (-s, -es, -d, -ed, -ing).
+ai_words = [
+    "delve",
+    "leverage",
+    "robust",
+    "seamless",
+    "seamlessly",
+    "unlock",
+    "elevate",
+    "landscape",
+    "testament",
+    "tapestry",
+    "realm",
+    "pivotal",
+    "intricate",
+    "multifaceted",
+    "holistic",
+    "synergy",
+    "showcase",
+    "underscore",
+    "foster",
+    "meticulous",
+    "meticulously",
+    "embark",
+    "paramount",
+    "streamline",
+    "empower",
+    "transformative",
+    "navigate the complexities",
+]
+
+# Summary closers (VOICE_SUMMARY_CLOSER): the last paragraph opening with one of these.
+summary_closers = [
+    "in short",
+    "the bottom line",
+    "bottom line",
+    "ultimately",
+    "in summary",
+    "to sum up",
+    "in conclusion",
+    "all in all",
+    "at the end of the day",
+    "the takeaway is simple",
+]
+
+# Short all-caps words that are plain English to a LinkedIn reader, not jargon (READ_*).
+plain_acronyms = ["I", "AI", "API", "APIs", "UI", "US", "UK", "EU", "CEO", "OK", "X", "PR", "PRs"]
+
+# Labelled sections (VOICE_LABELLED_SECTION): a segment, or a line in it, opening with one of
+# these and a colon. A warning for p4 drafts; Must fix for voice dry-nerdy (p5).
+section_labels = [
+    "cause",
+    "root cause",
+    "impact",
+    "fix",
+    "the fix",
+    "lesson",
+    "lessons",
+    "lesson learned",
+    "takeaway",
+    "takeaways",
+    "key takeaway",
+    "tl;dr",
+    "tldr",
+]
+
+# Verbs that state a fact about the code, the tool or the repository. A p5 FRAMING sentence (no
+# references) is blocked (FRAMING_HAS_CLAIM) when one follows a subject from
+# framing_claim_subjects ("the tests keep them apart"); with any other subject, or none, it is
+# the post's own wording ("a pleasant change", "easy to read"). Each entry also matches its plain
+# inflections (-s, -es, -d, -ed, -ing); irregular forms are listed as well.
+framing_claim_verbs = [
+    "use", "call", "return", "refuse", "block", "check", "pass", "fail", "fix", "add", "remove",
+    "change", "ship", "shipped", "shipping", "merge", "measure", "run", "ran", "post", "send",
+    "sent", "count", "cut", "reject", "accept", "store", "write", "wrote", "written", "read",
+    "validate", "verify", "verified", "build", "built", "break", "broke", "broken", "crash",
+    "log", "logged", "raise", "throw", "threw", "thrown", "cite", "drop", "dropped", "skip",
+    "skipped", "retry", "retried", "parse", "load", "save", "delete", "rename", "compile",
+    "deploy", "test", "catch", "caught", "match", "trigger", "record", "publish", "schedule",
+    "flag", "flagged", "truncate", "split", "rewrite", "rewrote", "detect", "ignore", "import",
+    "export", "cache", "fetch", "commit", "revert", "patch", "patched", "time out", "timed out",
+    "fits", "fit", "fitted",
+    "keep", "kept", "pin", "assert", "hold", "held", "show", "shown", "say", "said", "stay",
+    "make", "made", "handle", "treat", "expect", "allow", "prevent", "ensure", "guard", "enforce",
+    "require", "work", "worked", "is", "are", "was", "were", "has", "have", "had", "do", "does",
+    "did", "can", "cannot", "can't", "will", "won't", "would", "should", "must", "knows", "know",
+    "decide", "route", "sort", "gate", "mark", "label", "trust", "need",
+]
+
+# Subjects that make a following framing_claim_verbs word a claim about the code or the tool.
+framing_claim_subjects = [
+    "repo", "repos", "repository", "repositories", "codebase", "code", "test", "tests", "suite",
+    "tool", "tools", "script", "scripts", "function", "functions", "module", "modules", "backend",
+    "frontend", "pipeline", "checker", "build", "CI", "service", "server", "router", "parser",
+    "workflow", "workflows", "app", "library", "API", "endpoint", "handler", "route", "commit",
+    "config", "README", "harness", "fallback", "cache", "schema",
+]
+
+# Story ranking for voice dry-nerdy (C2c): a backlog story whose angle or support holds one of
+# these is a story with a change (a bug, a fix, a reversal, a failed run, a corrected result)
+# and is drafted before plain descriptions of a repository. Descriptions are still drafted when
+# nothing else is waiting. Each entry also matches its plain inflections.
+# Kept to markers of something going wrong or being put right: bare "fix"/"fixed" ("fixed
+# timers") and "breaks" ("each tamper breaks the hash") read as descriptions too often.
+change_words = [
+    "bug", "buggy", "defect", "regression", "broke", "broken", "crash", "revert", "reversal",
+    "reversed", "corrected", "correction", "mistake", "wrong", "incorrect", "fail", "failed",
+    "fails", "clobber", "mismatch", "no longer", "used to", "turned out", "found that",
+    "withdrawn", "superseded", "deviation", "rollback", "rolled back", "flaky", "leak", "leaked",
+    "stale", "a fix", "the fix", "and fixed", "was fixed", "is fixed", "been fixed", "got fixed",
+    "now fixed", "fixed it", "cannot work", "can't work", "does not work", "doesn't work",
+    "not atomic", "race condition", "never cleared", "anyone can", "overwritten", "not deployable",
+    "a different model than", "can be changed after",
+]
+
+# Post formats for the rotation memory (`automation.rotation`), per voice. "plain" (p4) keeps
+# its C2a bookkeeping list and nothing reads it; dry-nerdy (p5, C2b) alternates these two.
+[formats]
+plain = ["lesson", "before-after", "mistake", "how-it-works"]
+dry-nerdy = ["plain", "code-punchline"]

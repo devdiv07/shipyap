@@ -30,7 +30,7 @@ def test_public_profile_passes_without_any_private_files(tmp_path, capsys):
     shutil.copytree(PUBLIC, base / "public")
     assert main(["eval", "--cases", str(base), "--profile", "public", "--check"]) == 0
     out = capsys.readouterr().out
-    assert "stories=2" in out and "drafts=14" in out and out.rstrip().endswith("GATE PASS")
+    assert "stories=2" in out and "drafts=28" in out and out.rstrip().endswith("GATE PASS")
 
 
 def test_public_profile_pins_the_intended_defects(replay):
@@ -42,7 +42,7 @@ def test_public_profile_pins_the_intended_defects(replay):
     assert any("CORE_CLAIM_DROPPED" in (f.reason or "") for f in stories["invalid-core"].findings)
     assert sum(s.outside_quote for s in replay.stories) == 0
     drafts = {d.name: d for d in replay.drafts}
-    assert len(drafts) == 14
+    assert len(drafts) == 28  # + six C2b p5 cases (three controls, three blocked), one C2c
     assert drafts["overlong-reference"].repaired
     assert not drafts["author-angle"].approvable
     assert not drafts["outdated-option"].approvable and not drafts["outdated-status"].approvable
@@ -56,6 +56,28 @@ def test_public_profile_pins_the_intended_defects(replay):
     assert drafts["fixture-repair"].repair.status == "CLEAN"
     assert len(drafts["fixture-repair"].repair.rounds) == 1
     assert sum(d.false_alarms for d in replay.drafts) == 0
+
+
+def _blocks(draft, segment_id):
+    return {n.split(" ", 1)[0] for g in draft.gate if g.segment_id == segment_id for n in g.blocks}
+
+
+def test_public_profile_pins_the_code_claim_defects(replay):
+    """C1, SYNTHETIC: the same three patterns as the private compli drafts, and a control."""
+    drafts = {d.name: d for d in replay.drafts}
+    control = drafts["code-control"]
+    assert control.control and control.approvable and not any(g.blocks for g in control.gate)
+    assert _blocks(drafts["code-outcome"], "S02") == {"CODE_OUTCOME_UNSUPPORTED"}
+    assert not _blocks(drafts["code-outcome"], "S01")  # "calls send with ..." is code-level
+    assert drafts["code-outcome"].repair.status == "SHELVED"  # no model: it cannot be narrowed
+    narrowed = drafts["code-outcome-repair"].repair
+    assert narrowed.status == "CLEAN" and narrowed.approvable and len(narrowed.rounds) == 1
+    assert _blocks(drafts["code-label"], "S02") == {"CODE_MEANING_INCOMPLETE"}
+    shared = drafts["code-shared-flag"]
+    assert _blocks(shared, "S02") == _blocks(shared, "S03") == {"CODE_MEANING_INCOMPLETE"}
+    assert not _blocks(shared, "S01")
+    label = next(g for g in drafts["code-label"].gate if g.segment_id == "S02")
+    assert any("api/review.ts:16-16" in note for note in label.blocks)  # the `source: 'model'` line
 
 
 def test_public_missing_expected_case_fails(tmp_path, capsys):
@@ -136,3 +158,19 @@ def test_synthetic_x_preserves_opening_and_appends_scope_verbatim():
     )
     after = x_post(brief, parse_response(json.dumps(value).encode()))
     assert after.text.endswith(repaired.repair.texts["S05"]) and x_weight(after.text) <= 280
+
+
+def test_public_profile_pins_the_p5_voice_cases(replay):
+    """C2b, SYNTHETIC: three dry-nerdy drafts that pass every check, a sarcastic FRAMING line with
+    a number and one with a quoted name and a code verb (both FRAMING_HAS_CLAIM), and a
+    "Takeaway:" line, Must fix in a p5 draft."""
+    drafts = {d.name: d for d in replay.drafts}
+    for name in ("p5-plain", "p5-code-punchline", "p5-author"):
+        assert drafts[name].control and drafts[name].approvable, name
+        assert not any(g.blocks for g in drafts[name].gate), name
+    assert "FRAMING_HAS_CLAIM" in _blocks(drafts["p5-sarcastic-number"], "S05")
+    assert _blocks(drafts["p5-sarcastic-claim"], "S05") == {"FRAMING_HAS_CLAIM"}
+    assert _blocks(drafts["p5-pronoun-claim"], "S05") == {"FRAMING_HAS_CLAIM"}  # "It refuses"
+    assert _blocks(drafts["p5-labelled"], "S04") == {"LABELLED_SECTION"}
+    blocked = ("p5-sarcastic-number", "p5-sarcastic-claim", "p5-pronoun-claim")
+    assert not any(drafts[n].approvable for n in blocked)

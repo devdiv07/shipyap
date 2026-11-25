@@ -1,0 +1,28 @@
+{
+  "prompt_version": "f2",
+  "verdicts": [
+    {
+      "segment_id": "S01",
+      "verdict": "SUPPORTED",
+      "reason": "SYNTHETIC planted judgment.",
+      "refs": [
+        "api/score.ts:7-10"
+      ]
+    },
+    {
+      "segment_id": "S02",
+      "verdict": "OVERSTATED",
+      "reason": "SYNTHETIC planted judgment: 'Fallback (Acme unavailable)' includes 'Acme', so that fallback shows AI Review.",
+      "refs": [
+        "app/panel.tsx:16-16",
+        "api/score.ts:9-9"
+      ],
+      "supplied": [
+        "api/score.ts:9-9",
+        "api/score.ts:13-13",
+        "api/score.ts:15-15",
+        "app/panel.tsx:10-10"
+      ]
+    }
+  ]
+}

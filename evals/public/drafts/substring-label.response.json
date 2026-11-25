@@ -1,0 +1,43 @@
+{
+  "response_version": "1",
+  "brief_sha256": "4dba3c71bb40aacc4e762cd3e0cbfbe154eed5f2d3a319974e20d8a3060a61a1",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "When the Acme call is not ok, the scoring route falls back to ruleScore.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "api/score.ts",
+          "line_start": 7,
+          "line_end": 10,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "The badge shows AI Review or Rule Check from the provider field, so a reader can see which path produced the score.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/panel.tsx",
+          "line_start": 15,
+          "line_end": 17,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    }
+  ],
+  "verification_needed": []
+}

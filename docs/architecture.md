@@ -62,6 +62,11 @@ through the current checks, offline and free; `--check` fails when results drift
 - **Paid calls** need `--allow-paid` on each run. Every model request is token-counted first and
   refused if the run's reservation would pass `max_cost_usd`; `weekly_draft_cap` stops a run
   before anything is read. Nothing is retried, and an uncertain call is recorded, not repeated.
+- **Plan route** (`provider = "claude-plan"`, `automation/plan_route.py`): the same requests go
+  to Claude Code through the owner's subscription. Python only writes them to `model-outbox/` and
+  reads `model-inbox/`; `scripts/model-plan.ps1` alone starts `claude -p` (no tools, no
+  customizations, fresh empty folder, API-key variables removed, subscription login required).
+  It needs no `--allow-paid` and is capped by `plan_calls_per_day` and `plan_window` instead.
 - **Credentials** are read in two places only: `drafting/provider.py` (`PROS_ANTHROPIC_API_KEY`)
   and `publication/buffer.py` (`PROS_BUFFER_API_KEY`, `PUBLISHING_DISABLED`). Tests enforce it.
 - **Network** code is confined to `ingestion/transport.py` (fixed host `api.github.com`),

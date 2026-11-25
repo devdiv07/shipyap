@@ -56,6 +56,8 @@ def _mask_clone_url(text: str, relative: str, login: str) -> str:
         f"(https://github.com/{login}/shipyap/actions/workflows/ci.yml)",
         f"[![Release](https://img.shields.io/github/v/release/{login}/shipyap)]"
         f"(https://github.com/{login}/shipyap/releases/latest)",
+        "[Watch the demo video]"
+        f"(https://github.com/{login}/shipyap/releases/download/v0.2.0/shipyap-demo.mp4)",
     )
     for line in lines:
         text = re.sub(rf"(?m)^{re.escape(line)}$", "OWNER_REPOSITORY_LINK", text, count=1)

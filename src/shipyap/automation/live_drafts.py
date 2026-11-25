@@ -31,6 +31,7 @@ class LiveDraft:
     fact_check: str  # COMPLETE, INHERITED or REQUIRED
     refusal: str | None = None  # why the page does not list it, when it does not
     ordinary_publication_eligible: bool = False
+    style: tuple[str, ...] = ()  # voice and readability warnings (C2a), "S01 CODE detail"
 
 
 def _copy_db(source: Path, target: Path) -> Path:
@@ -54,6 +55,7 @@ def _codes(reasons) -> str:
 
 def replay_live(workspace: Path) -> list[LiveDraft]:
     """Raises AutomationError (config), ReviewError or sqlite3.Error when unreadable."""
+    from shipyap.automation.evaluation import style_lines
     from shipyap.review.service import ReviewDesk, ReviewError, ReviewState
     from shipyap.review.ux import status
 
@@ -126,6 +128,7 @@ def replay_live(workspace: Path) -> list[LiveDraft]:
                     and item.state != ReviewState.REJECTED
                     and not item.publications
                     and not item.duplicate_posts,
+                    style_lines(gate),
                 )
             )
     return sorted(found, key=lambda d: d.story_id)
@@ -140,6 +143,9 @@ def render(drafts: list[LiveDraft]) -> list[str]:
             f"({draft.reason}); fact check {draft.fact_check}; page: {draft.status}{listed}; "
             f"ordinary publication eligible: {'yes' if draft.ordinary_publication_eligible else 'no'}"
         )
+        if draft.style:
+            lines.append(f"  STYLE warnings={len(draft.style)}")
+            lines += [f"    STYLE {line}" for line in draft.style]
     lines.append(f"LIVE TOTAL drafts={len(drafts)} approvable={sum(d.approvable for d in drafts)}")
     return lines
 

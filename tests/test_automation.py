@@ -33,7 +33,7 @@ from shipyap.editorial.models import UNVERIFIED_PREFIX, DraftStatus
 from shipyap.ingestion.transport import _API_PATH
 from shipyap.preferences.repositories import RepositoryPreferences
 from shipyap.review.pages import StoryView, queue_page, story_page
-from shipyap.review.service import ReviewDesk, ReviewState
+from shipyap.review.service import ReviewDesk, ReviewState, reject_phrase
 from shipyap.stories.backlog import StoryBacklog, StoryState
 from shipyap.stories.errors import StoryError, StoryErrorCode
 
@@ -212,6 +212,17 @@ def test_historical_then_backlog_then_idempotent_and_reviewable(work):
             StoryState.AVAILABLE,
             StoryState.OFFERED,
         ]
+    # One draft per repository in a review batch: the first draft is still waiting for review,
+    # so the repository's other story waits too, and nothing is paid for.
+    held = execute(cfg, github, model, allow_paid=True)
+    assert held.statuses == ["NO_CHANGES"] and not held.drafts_created
+    assert any("one draft per repository" in note for note in held.notes), held.notes
+    assert len(model.generations) == 2
+    ledger = cfg.state / review_page.REVIEW_LEDGER
+    desk = ReviewDesk(cfg.drafts, cfg.backlog, ledger, tuple(first.snapshots))
+    (waiting,), _ = desk.queue()
+    sid = waiting.story.story_id
+    desk.reject(sid, reject_phrase(sid), waiting.seq, datetime(2026, 11, 20, tzinfo=UTC))
     second_run = execute(cfg, github, model, allow_paid=True)
     assert second_run.statuses == ["BACKLOG_DRAFTED"]
     assert second_run.existing_available == 1 and second_run.evidence_examined == 0
@@ -221,10 +232,9 @@ def test_historical_then_backlog_then_idempotent_and_reviewable(work):
     assert third_run.statuses == ["NO_CHANGES"]
     assert not third_run.drafts_created and not third_run.estimated_usd
     assert len(model.counts) == counts and len(model.generations) == 3
-    desk = ReviewDesk(cfg.drafts, cfg.backlog, cfg.state / "review.sqlite", tuple(first.snapshots))
     items, refused = desk.queue()
     assert not refused and len(items) == 2
-    assert all(i.state == ReviewState.UNAPPROVED for i in items)
+    assert {i.state for i in items} == {ReviewState.UNAPPROVED, ReviewState.REJECTED}
     assert all(i.current.record.draft_status == DraftStatus.READY_FOR_REVIEW for i in items)
     html = queue_page(items, refused)
     assert all(item.story.story_id in html for item in items)
@@ -1366,3 +1376,39 @@ def test_a_usage_limit_after_the_draft_says_the_draft_was_made(work):
         "(resets 2026-11-01 00:00 UTC). Raise it in the Anthropic Console or wait. The draft "
         "was made; the later request was refused and not charged."
     )
+
+
+def test_the_run_summary_names_each_refused_finding_and_its_reason(work):
+    """The ordinary trial printed "FINDINGS_REFUSED (1)" and nothing else: the owner could not
+    tell which check refused what. Each refusal now gets one line (story key and reason code;
+    never the finding's text), in the console summary and in last-run.txt."""
+    cfg, _ = work
+    core = historic_finding(
+        story_key="unsupported-core-number",
+        angle="The scene was confirmed for 99 runs. A screenshot proves capture only.",
+    )
+    broken = historic_finding(story_key="Not A Slug!")
+    unknown = historic_finding(
+        story_key="cites-a-missing-file", source_refs=[ref("MISSING.md", 1, 1)]
+    )
+    model = Model(findings=[historic_finding(), core, broken, unknown])
+    result = execute(replace(cfg, max_new_drafts=0), model=model, allow_paid=True)
+    assert f"{REPO}: FINDINGS_REFUSED (3)" in result.failures
+    assert len(result.refusals) == 3
+    assert result.refusals[0] == f"{REPO}: unsupported-core-number: CORE_CLAIM_DROPPED"
+    assert result.refusals[1].startswith(f"{REPO}: <finding 3>: SCHEMA ")
+    assert "Not A Slug" not in result.refusals[1]  # an unsafe key is shown by position only
+    assert result.refusals[2].startswith(f"{REPO}: cites-a-missing-file: REF_PATH_NOT_IN_SNAPSHOT")
+    cli._tell(cfg, result, [])
+    last = (cfg.workspace_root / "last-run.txt").read_text(encoding="utf-8").splitlines()
+    start = last.index(f"needs you: {REPO}: FINDINGS_REFUSED (3)")
+    assert last[start + 1 : start + 4] == [f"refused: {line}" for line in result.refusals]
+    assert "99 runs" not in "\n".join(last)  # the refused angle itself is never printed
+
+
+def test_a_run_without_refusals_prints_no_refusal_lines(work):
+    cfg, _ = work
+    result = execute(replace(cfg, max_new_drafts=0), model=Model(), allow_paid=True)
+    assert result.refusals == [] and not result.failures
+    cli._tell(cfg, result, [])
+    assert "refused:" not in (cfg.workspace_root / "last-run.txt").read_text(encoding="utf-8")

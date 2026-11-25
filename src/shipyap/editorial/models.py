@@ -402,6 +402,8 @@ class FindingCode(StrEnum):
     TOOL_ITEM_CITED = "TOOL_ITEM_CITED"
     TOOL_PHRASE = "TOOL_PHRASE"
     AUTHOR_NOT_STATEMENT = "AUTHOR_NOT_STATEMENT"
+    CODE_OUTCOME_UNSUPPORTED = "CODE_OUTCOME_UNSUPPORTED"
+    FRAMING_HAS_CLAIM = "FRAMING_HAS_CLAIM"
     # Blocking, whole post.
     POST_TOO_LONG = "POST_TOO_LONG"
     # Warnings, per segment.
@@ -413,6 +415,8 @@ class FindingCode(StrEnum):
     VERIFICATION_REF_INVALID = "VERIFICATION_REF_INVALID"
     TOOL_WORD = "TOOL_WORD"
     AUTHOR_RECLASSIFIED = "AUTHOR_RECLASSIFIED"
+    # A warning in the assertion map; the review gate blocks it until a fact check saw its lines.
+    CODE_MEANING_INCOMPLETE = "CODE_MEANING_INCOMPLETE"
     # Warnings, whole post.
     NO_INSIGHT_REFERENCE = "NO_INSIGHT_REFERENCE"
     NO_SOURCE_REFERENCE = "NO_SOURCE_REFERENCE"

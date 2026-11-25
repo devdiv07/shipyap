@@ -62,9 +62,10 @@ from shipyap.drafting.policy import (
     parse_budget,
 )
 from shipyap.drafting.prompt import (
+    FORMATS,
     MODEL_OUTPUT_SCHEMA,
-    STORY_PROMPT_VERSION,
-    STORY_SYSTEM_PROMPT,
+    prompt_version,
+    story_system_prompt,
 )
 from shipyap.drafting.service import (
     ModelDraftResult,
@@ -75,10 +76,12 @@ from shipyap.drafting.service import (
 )
 from shipyap.editorial.brief import build_brief, render_brief_json
 from shipyap.editorial.bundle import BundleIncomplete, publish_bundle, verify_bundle
+from shipyap.editorial.closing import DEFAULT_BUILT_BY_ME, add_closing, closing_text
 from shipyap.editorial.errors import EditorialError
 from shipyap.editorial.inputs import RESPONSE_CAP_BYTES
 from shipyap.editorial.models import (
     CITED_EVIDENCE_PREFIX,
+    MAX_SEGMENTS,
     NO_PERSONAL_RECORD,
     NOT_ATTEMPTED,
     NOT_LEARNED,
@@ -87,6 +90,7 @@ from shipyap.editorial.models import (
     ROLES_PREFIX,
     UNRECORDED_AUTHOR,
     AuthorContribution,
+    Basis,
     Brief,
     BundleKind,
     BundleRecord,
@@ -155,6 +159,8 @@ class AuthorProfile:
     learned: tuple[str, ...] = ()
     do_not_claim: tuple[str, ...] = ()
     hashtags: tuple[str, ...] = ()
+    # C2c: the owner built this repository; the closing line says so (never sent to a model).
+    built_by_me: bool = False
 
 
 class StoryDraftErrorCode(StrEnum):
@@ -167,6 +173,7 @@ class StoryDraftErrorCode(StrEnum):
     GENERATION_ATTEMPTED = "GENERATION_ATTEMPTED"
     ATTEMPT_WRITE_FAILED = "ATTEMPT_WRITE_FAILED"
     LINK_WRITE_FAILED = "LINK_WRITE_FAILED"
+    STYLE_INVALID = "STYLE_INVALID"
 
 
 MESSAGES: dict[StoryDraftErrorCode, str] = {
@@ -197,6 +204,9 @@ MESSAGES: dict[StoryDraftErrorCode, str] = {
         "the generation attempt could not be recorded, so the generation request was not sent"
     ),
     StoryDraftErrorCode.LINK_WRITE_FAILED: "the story link record could not be written",
+    StoryDraftErrorCode.STYLE_INVALID: (
+        "voice dry-nerdy needs author_style_file (1 to 6,000 characters) and a known format"
+    ),
 }
 
 
@@ -239,6 +249,64 @@ class StoryDraftPlan:
     model: str
     budget: str
     offline: Estimate
+    system_prompt: str = ""  # p4 for voice "plain", p5 for "dry-nerdy"
+    post_format: str | None = None  # dry-nerdy only: "plain" or "code-punchline"
+    closing: str | None = None  # C2c: the tool's closing line (repository link), or None
+
+    @property
+    def prompt_version(self) -> str:
+        return prompt_version(self.system_prompt)
+
+
+def pick_format(story: Story, last_format: str | None) -> str:
+    """The dry-nerdy format for `story`: the one the last post did not use, except that
+    code-punchline needs a CODE file among the story's own cited evidence (else plain)."""
+    choice = next((f for f in FORMATS if f != last_format), FORMATS[0])
+    if choice == "code-punchline" and not any(role(r.path) == "CODE" for r in story.latest.refs):
+        return "plain"
+    return choice
+
+
+def drafted_format(segments) -> str:
+    """The format a dry-nerdy draft actually has: code-punchline when its first segment is one
+    line of a CODE file copied verbatim (a SOURCE segment whose quote is its whole text), else
+    plain. Judged on the draft, not on what the prompt asked for."""
+    first = segments[0] if segments else None
+    if first is None or first.basis != Basis.SOURCE or len(first.source_refs) != 1:
+        return "plain"
+    ref = first.source_refs[0]
+    if role(ref.path) != "CODE" or ref.quote is None or ref.line_start != ref.line_end:
+        return "plain"
+    return "code-punchline" if ref.quote.strip() == first.text.strip() else "plain"
+
+
+def is_change_story(story: Story) -> bool:
+    """A story about a change (a bug, a fix, a reversal, a failed run, a corrected result), by
+    the `change_words` of its angle and support; otherwise a description of the repository."""
+    from shipyap.editorial.voice import change_words
+
+    return bool(change_words(f"{story.latest.angle}\n{story.latest.support}"))
+
+
+def prefer_change(ranked: list) -> list:
+    """voice dry-nerdy (C2c): within each repository mode (focus before occasional, as `rank`
+    orders them), change stories first, then descriptions; otherwise the ranking's own order.
+    A description is still drafted when no change story is waiting."""
+    order = {mode: i for i, mode in enumerate(dict.fromkeys(item.mode for item in ranked))}
+    return sorted(ranked, key=lambda item: (order[item.mode], not is_change_story(item.story)))
+
+
+def _prefer_other_repo(ranked: list, last_repo: str | None, drafts: Path) -> list:
+    """`ranked` with the last post's repository moved behind the others (stable), unless it is
+    the only one. A story whose generation already started stays first: recovering it is free,
+    and skipping it would leave its outputs half done."""
+    if last_repo is None:
+        return ranked
+    started = [i for i in ranked if _exists(story_paths(drafts, i.story.story_id).attempt)]
+    rest = [i for i in ranked if i not in started]
+    other = [i for i in rest if i.story.repo_id != last_repo]
+    same = [i for i in rest if i.story.repo_id == last_repo]
+    return started + other + same
 
 
 @dataclass(frozen=True)
@@ -281,10 +349,19 @@ def plan_story_draft(
     budget: str,
     authors: Mapping[str, AuthorProfile] | None = None,
     exclude: frozenset[tuple[str, str]] = frozenset(),
+    voice: str = "plain",
+    style: str = "",
+    last_repo: str | None = None,
+    last_format: str | None = None,
+    link_repo: bool = False,
+    built_by_me_line: str = DEFAULT_BUILT_BY_ME,
 ) -> StoryDraftPlan | None:
     """None when no story is available: nothing is verified, built or sent. `authors` maps a
     repository id to the owner's profile for it; a repository without one keeps the
-    third-person, no-author contribution."""
+    third-person, no-author contribution. voice "plain" is p4 exactly (the rotation arguments
+    are ignored); "dry-nerdy" is p5 with the owner's `style` file, a story from another
+    repository than `last_repo` when one is available, and a format other than `last_format`
+    when the story allows it."""
     if model not in MODELS:
         raise DraftingError(DraftingErrorCode.MODEL_UNKNOWN)
     budget_usd = parse_budget(budget)
@@ -304,7 +381,14 @@ def plan_story_draft(
         ]
     if not ranked:
         return None
+    if voice == "dry-nerdy":
+        ranked = _prefer_other_repo(prefer_change(ranked), last_repo, drafts)
     story = ranked[0].story
+    post_format = pick_format(story, last_format) if voice == "dry-nerdy" else None
+    try:
+        system_prompt = story_system_prompt(voice, style, post_format or "plain")
+    except ValueError:
+        raise StoryDraftError(StoryDraftErrorCode.STYLE_INVALID) from None
 
     snapshot_dir, snapshot = _evidence_snapshot(story, snapshot_dirs)
     author = (authors or {}).get(story.repo_id)
@@ -318,11 +402,20 @@ def plan_story_draft(
     if len(brief_md) > MAX_MODEL_BRIEF_BYTES:
         raise DraftingError(DraftingErrorCode.BRIEF_TOO_LARGE_FOR_MODEL)
     paths = story_paths(drafts, story.story_id)
-    state, response = _output_state(story, paths, brief_json, brief)
+    closing = (
+        closing_text(
+            brief.snapshot.source_url, author is not None and author.built_by_me, built_by_me_line
+        )
+        if link_repo
+        else None
+    )
+    # C2c: p5 is told the closing line's length, so its own text leaves room for it.
+    system_prompt = story_system_prompt(voice, style, post_format or "plain", closing)
+    state, response = _output_state(story, paths, brief_json, brief, closing)
     request_bytes = sum(
         len(part)
         for part in (
-            STORY_SYSTEM_PROMPT.encode(),
+            system_prompt.encode(),
             brief_md,
             json.dumps(MODEL_OUTPUT_SCHEMA).encode(),
         )
@@ -341,6 +434,9 @@ def plan_story_draft(
         model=model,
         budget=budget,
         offline=offline_estimate(model, request_bytes),
+        system_prompt=system_prompt,
+        post_format=post_format,
+        closing=closing,
     )
 
 
@@ -365,12 +461,14 @@ def run_story_draft(
         plan.paths.draft,
         model=plan.model,
         budget=plan.budget,
-        system_prompt=STORY_SYSTEM_PROMPT,
+        system_prompt=plan.system_prompt,
     )
     if prepared.brief_sha256 != plan.brief_sha256:
         raise StoryDraftError(StoryDraftErrorCode.OUTPUT_CONFLICT)
     recorded = _RecordedDrafter(drafter, plan)
-    model_run = run_model_draft(prepared, model_plan, recorded, plan.paths.draft)
+    model_run = run_model_draft(
+        prepared, model_plan, recorded, plan.paths.draft, closing=plan.closing
+    )
     return _link_and_offer(plan, backlog_path, now, model_run)
 
 
@@ -396,9 +494,16 @@ def recover_story_draft(
             raise StoryDraftError(StoryDraftErrorCode.OUTPUT_CONFLICT)
         # A response kept before a model-reply fix is rebuilt under the same rules as a new one.
         build_from_response(
-            prepared, checked_input(plan.response, prepared.brief).data, plan.paths.draft
+            prepared,
+            closed(checked_input(plan.response, prepared.brief).data, prepared.brief, plan.closing),
+            plan.paths.draft,
         )
     return _link_and_offer(plan, backlog_path, now, None)
+
+
+def closed(data: bytes, brief: Brief, closing: str | None) -> bytes:
+    """The checked response bytes with the tool's closing line added (`editorial.closing`)."""
+    return add_closing(data, closing, brief.snapshot.source_url, MAX_SEGMENTS)
 
 
 def attempt_document(story: Story, brief_sha256: str) -> bytes:
@@ -443,7 +548,7 @@ class _RecordedDrafter:
                 _withdraw_attempt(plan.paths.attempt)
             raise
         try:
-            data = response_bytes(reply, plan.brief_sha256, STORY_PROMPT_VERSION)
+            data = response_bytes(reply, plan.brief_sha256, plan.prompt_version)
             _publish_one(
                 plan.paths.response,
                 RESPONSE_FILE,
@@ -610,7 +715,7 @@ _PREDECESSORS = {"attempt": "brief", "response": "attempt", "draft": "attempt", 
 
 
 def _output_state(
-    story: Story, paths: StoryPaths, brief_json: bytes, brief: Brief
+    story: Story, paths: StoryPaths, brief_json: bytes, brief: Brief, closing: str | None = None
 ) -> tuple[OutputState, bytes | None]:
     """Every output present is verified, whichever later ones exist, before any is relied on."""
     present = {name: _exists(path) for name, path in vars(paths).items()}
@@ -636,7 +741,7 @@ def _output_state(
         if response is None:
             return OutputState.ATTEMPTED, None
         return OutputState.RESPONDED, response
-    record_sha256, record = _verified_draft(paths.draft, brief_json, response, brief)
+    record_sha256, record = _verified_draft(paths.draft, brief_json, response, brief, closing)
     if not present["link"]:
         return OutputState.DRAFTED, response
     _require_link(paths.link, story, paths, record_sha256, record)
@@ -644,10 +749,15 @@ def _output_state(
 
 
 def _verified_draft(
-    directory: Path, brief_json: bytes, response: bytes | None = None, brief: Brief | None = None
+    directory: Path,
+    brief_json: bytes,
+    response: bytes | None = None,
+    brief: Brief | None = None,
+    closing: str | None = None,
 ) -> tuple[str, BundleRecord]:
     """With `response`, the bundle must have been built from the kept response: as kept, or as
-    `checked_input` repairs it (the same deterministic result, re-derived here)."""
+    `checked_input` repairs it (the same deterministic result, re-derived here), with or without
+    the tool's closing line (a draft built before the closing setting changed stays valid)."""
     try:
         bundle = verify_bundle(directory, BundleKind.DRAFT)
     except BundleIncomplete:
@@ -657,12 +767,10 @@ def _verified_draft(
     ):
         raise StoryDraftError(StoryDraftErrorCode.OUTPUT_CONFLICT)
     built = bundle.files["response.json"]
-    if (
-        response is not None
-        and built != response
-        and (brief is None or built != checked_input(response, brief).data)
-    ):
-        raise StoryDraftError(StoryDraftErrorCode.OUTPUT_CONFLICT)
+    if response is not None and built != response:
+        checked = checked_input(response, brief).data if brief is not None else None
+        if checked is None or built not in (checked, closed(checked, brief, closing)):
+            raise StoryDraftError(StoryDraftErrorCode.OUTPUT_CONFLICT)
     return bundle.record_sha256, bundle.record
 
 

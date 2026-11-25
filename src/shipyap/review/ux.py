@@ -5,7 +5,7 @@ from html import escape
 
 from shipyap.editorial.models import DraftStatus
 from shipyap.publication.ledger import IntentState
-from shipyap.review.gate import Gate, judge
+from shipyap.review.gate import Gate, is_style, judge
 from shipyap.review.service import ReviewItem, ReviewState
 
 REASONS = {
@@ -21,6 +21,16 @@ REASONS = {
     "TOOL_ITEM_CITED": "This sentence cites a tool note instead of repository evidence.",
     "TOOL_PHRASE": "This sentence contains wording from the tool's instructions.",
     "AUTHOR_NOT_STATEMENT": "This author claim does not cite your own statement.",
+    "CODE_OUTCOME_UNSUPPORTED": (
+        "Code shows what it is written to do, not what happened: say what it calls or sets."
+    ),
+    "CODE_MEANING_INCOMPLETE": (
+        "This value is also set in lines the sentence does not cite; check them, or narrow it."
+    ),
+    "FRAMING_HAS_CLAIM": (
+        "A framing line makes a factual claim (a number, a quote, a name, what the code does): "
+        "cite it as a fact or take the claim out."
+    ),
     "POST_TOO_LONG": "The post exceeds the posting length limit.",
     "FIRST_PERSON_FROM_STATEMENT": "Check that these first-person words match your statement.",
     "PROMOTIONAL_LANGUAGE": "Check whether this wording sounds promotional.",
@@ -33,6 +43,23 @@ REASONS = {
     "NO_INSIGHT_REFERENCE": "Check that the post explains the useful takeaway.",
     "NO_SOURCE_REFERENCE": "The post needs a reference to repository evidence.",
     "NO_LIMITATION_REFERENCE": "Check that the post states its scope and limitations.",
+    "VOICE_CLICHE": "This phrase is a cliché; say it plainly.",
+    "VOICE_AI_WORD": "This word makes posts read as AI-written; use a plainer one.",
+    "VOICE_CONTRAST": "The \"it's not X, it's Y\" pattern reads as AI-written.",
+    "VOICE_EM_DASHES": "Several em dashes in one sentence; split it or use commas.",
+    "VOICE_QUESTION_OPENER": "The post opens with a rhetorical question; open with the fact.",
+    "VOICE_EMOJI_BULLET": "Emoji used as bullets read as AI-written.",
+    "VOICE_SUMMARY_CLOSER": 'A summary closer ("In short", "Ultimately") reads as AI-written.',
+    "VOICE_TRIADS": "Several three-item lists in a row read as rhythm, not content.",
+    "VOICE_FLAT_RHYTHM": "The sentences are all about the same length; vary them.",
+    "VOICE_LABELLED_SECTION": 'A labelled section ("Cause:", "Fix:", "Takeaway:") reads as AI.',
+    "VOICE_MARKDOWN_STRUCTURE": "Headers and bullet lists read as a report, not a post.",
+    "LABELLED_SECTION": 'Labelled sections ("Cause:", "Fix:", "Takeaway:") are not your voice.',
+    "MARKDOWN_STRUCTURE": "Headers and bullet lists are not your voice; write it as sentences.",
+    "READ_OPENER_LONG": "The opening sentence is long; 20 words or fewer reads better.",
+    "READ_OPENER_JARGON": "The opening sentence uses jargon or code names.",
+    "READ_LONG_SENTENCE": "This sentence is over 30 words; consider splitting it.",
+    "READ_JARGON_DENSITY": "A lot of jargon for a general reader.",
     "OUTDATED": "A later record supersedes what this sentence says.",
     "FACT_CHECK_OUTDATED": "The stored fact check found a later record that supersedes this claim.",
     "FACT_CHECK_CONTRADICTED": "The stored fact check found evidence against this claim.",
@@ -59,8 +86,13 @@ def effective_gate(item: ReviewItem, gate: Gate | None, fact_check=None) -> Gate
 
 
 def attention_count(gate: Gate) -> int:
-    return sum(bool(s.blocks or s.warnings) for s in gate.segments) + bool(
-        gate.document_blocks or gate.document_warnings
+    """Sentences (and the whole post) that need attention; style notes alone never do."""
+
+    def real(notes):
+        return any(not is_style(note) for note in notes)
+
+    return sum(bool(s.blocks) or real(s.warnings) for s in gate.segments) + bool(
+        gate.document_blocks or real(gate.document_warnings)
     )
 
 
@@ -188,6 +220,8 @@ def flagged(item: ReviewItem, gate: Gate, records=()) -> str:
 def _reasons(notes, label, severity):
     return "".join(
         f"<p><strong class={severity}>{label}</strong> — "
-        f"{escape(REASONS.get(n.code, 'Read this finding and its evidence in Details.'))}</p>"
+        f"{escape(REASONS.get(n.code, 'Read this finding and its evidence in Details.'))}"
+        + (f" <span class=muted>({escape(n.detail)})</span>" if is_style(n) and n.detail else "")
+        + "</p>"
         for n in notes
     )

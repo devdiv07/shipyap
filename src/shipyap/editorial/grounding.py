@@ -24,6 +24,15 @@ What the checks establish, and nothing more:
   unless a cited file uses them; its single words ("backlog", "snapshot" ...) only warn.
 - An AUTHOR segment of a recorded author must cite one of the author's own statements. Without
   one it is blocked when it uses first person, otherwise classified INTERPRETATION with a warning.
+- A FRAMING segment (no references) is non-factual by declaration, so nothing in it can be
+  cited or checked. In a p5 (voice dry-nerdy) draft, where humour may live in FRAMING, it is
+  blocked (FRAMING_HAS_CLAIM) when it carries what a claim needs: a
+  number (digits or a spelled number), a quoted string, a file, function or code name (a path,
+  a file name, an identifier, a name with "()", or a snapshot file's name), or a factual verb
+  (`voice_lists.toml` framing_claim_verbs) whose subject is the repository, its code, its tests
+  or the tool (framing_claim_subjects: "the tests keep them apart"). A listed verb with any other
+  subject is the post's own wording ("a pleasant change", "easy to read"). Deliberately strict:
+  a dry line that trips it is rewritten without the claim, or becomes a cited sentence.
 
 Blocking findings make the draft NEEDS_REVISION. Style concerns are warnings. Prose is never
 rewritten. Semantic support stays UNKNOWN for every segment whatever the outcome.
@@ -34,6 +43,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from shipyap.editorial import code_claims
 from shipyap.editorial.models import (
     LOCATED,
     MAX_POST_CHARS,
@@ -61,6 +71,7 @@ from shipyap.editorial.models import (
     is_own_statement,
     is_tool_item,
 )
+from shipyap.stories.roles import role
 
 BLOCKING = frozenset(
     {
@@ -76,6 +87,8 @@ BLOCKING = frozenset(
         FindingCode.TOOL_ITEM_CITED,
         FindingCode.TOOL_PHRASE,
         FindingCode.AUTHOR_NOT_STATEMENT,
+        FindingCode.CODE_OUTCOME_UNSUPPORTED,
+        FindingCode.FRAMING_HAS_CLAIM,
         FindingCode.POST_TOO_LONG,
     }
 )
@@ -106,6 +119,19 @@ MESSAGES: dict[FindingCode, str] = {
     FindingCode.AUTHOR_NOT_STATEMENT: (
         "first person stated as the author's (AUTHOR) while citing none of the author's own "
         "statements; the backlog angle is not their words"
+    ),
+    FindingCode.CODE_OUTCOME_UNSUPPORTED: (
+        "a runtime outcome stated from code lines alone; code shows what it is written to do "
+        "(it calls X, on error it falls back to Y), not what happened when it ran"
+    ),
+    FindingCode.FRAMING_HAS_CLAIM: (
+        "a FRAMING sentence (no references) carries a factual claim: a number, a quoted string, "
+        "a file or function name, or a verb saying what the code or tool does; cite it as a "
+        "fact or drop the claim"
+    ),
+    FindingCode.CODE_MEANING_INCOMPLETE: (
+        "says what a value means, but the value is also set outside the cited lines; those lines "
+        "must be fact-checked, or the sentence narrowed to what the cited lines do"
     ),
     FindingCode.TOOL_WORD: "a word the tool uses internally that no cited file uses; check it",
     FindingCode.AUTHOR_RECLASSIFIED: (
@@ -350,6 +376,28 @@ def scope_lines(lines: Iterable[str]) -> tuple[int, int] | None:
     return None
 
 
+def scope_paragraph(lines: Iterable[str]) -> str | None:
+    """The text of a file's own scope statement (`scope_lines`), Markdown emphasis removed and
+    spaces joined: the words a scope sentence citing those lines may use. None: no statement."""
+    lines = list(lines)
+    scope = scope_lines(lines)
+    if scope is None:
+        return None
+    start, end = scope
+    return _SPACE.sub(" ", _EMPHASIS.sub("", " ".join(lines[start - 1 : end]))).strip()
+
+
+def scope_sentences(lines: Iterable[str]) -> tuple[str, ...]:
+    """The whole sentences of a file's scope statement that themselves state a limit, in order,
+    verbatim (emphasis removed). Empty: no statement."""
+    from shipyap.editorial.voice import sentences
+
+    paragraph = scope_paragraph(lines)
+    if paragraph is None:
+        return ()
+    return tuple(s for s in sentences(paragraph) if _SCOPE.search(s))
+
+
 def label_index(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
     """Every label that appears in `texts` (file lines and paths), for `labels` lookups."""
     return frozenset(label for text in texts for label in labels(text))
@@ -363,6 +411,38 @@ def _paragraphs(segments: Iterable[Segment]) -> list[list[Segment]]:
             paragraphs.append([])
         paragraphs[-1].append(segment)
     return paragraphs
+
+
+def closing_id(brief: Brief, response: DraftResponse) -> str | None:
+    """The id of the tool's closing line (`editorial.closing`) when the post ends with one."""
+    from shipyap.editorial.closing import is_closing
+
+    last = response.segments[-1] if response.segments else None
+    if last is not None and is_closing(last, brief.snapshot.source_url):
+        return last.id
+    return None
+
+
+def _closing_record(segment: Segment, brief: Brief) -> SegmentRecord:
+    """The tool's closing line: FRAMING, never judged (it is the repository link the tool
+    wrote, with the owner's configured wording)."""
+    questions = (
+        REVIEW_QUESTIONS
+        if brief.contribution.author_name != UNRECORDED_AUTHOR
+        else UNRECORDED_REVIEW_QUESTIONS
+    )
+    return SegmentRecord(
+        id=segment.id,
+        paragraph_break_before=segment.paragraph_break_before,
+        text=segment.text,
+        declared_basis=segment.basis,
+        classification=Classification.FRAMING,
+        review_question=questions[Classification.FRAMING],
+        source_refs=(),
+        author_refs=(),
+        numbers=(),
+        findings=(),
+    )
 
 
 def render_post(segments: Iterable[Segment]) -> str:
@@ -382,9 +462,23 @@ def check_draft(
         + [line for source in brief.sources for line in source.lines]
     )
     statement = has_statement(brief)
+    code_files = _code_files(brief, evidence.values())
+    from shipyap.editorial.voice import is_dry_nerdy
+
+    strict_framing = is_dry_nerdy(response.generator.label)
+    closing = closing_id(brief, response)
     records = tuple(
-        _check_segment(
-            segment, brief, evidence[segment.id], comparisons.get(segment.id, []), known, statement
+        _closing_record(segment, brief)
+        if segment.id == closing
+        else _check_segment(
+            segment,
+            brief,
+            evidence[segment.id],
+            comparisons.get(segment.id, []),
+            known,
+            statement,
+            code_files,
+            strict_framing,
         )
         for segment in response.segments
     )
@@ -637,6 +731,8 @@ def _check_segment(
     comparisons: list[Finding],
     known_labels: frozenset[tuple[str, str]],
     statement: bool,
+    code_files: dict[str, tuple[str, ...]] | None = None,
+    strict_framing: bool = False,
 ) -> SegmentRecord:
     findings: list[Finding] = []
     refs, authors = evidence.refs, evidence.authors
@@ -680,6 +776,11 @@ def _check_segment(
     findings += _tool_terms(segment.id, prose, files)
     if author_recorded and segment.basis == Basis.AUTHOR:
         findings += _author_basis(segment.id, prose, evidence)
+    findings += _code_claims(segment, prose, evidence, code_files or {})
+    if strict_framing and segment.basis == Basis.FRAMING:
+        claims = framing_claims(prose, [source.path for source in brief.sources])
+        if claims:
+            findings.append(_finding(FindingCode.FRAMING_HAS_CLAIM, segment.id, "; ".join(claims)))
 
     classification = _classify(segment.basis, findings)
     questions = REVIEW_QUESTIONS if author_recorded else UNRECORDED_REVIEW_QUESTIONS
@@ -697,12 +798,86 @@ def _check_segment(
     )
 
 
+_QUOTED_STRING = re.compile(r"\"[^\"]+\"|“[^”]+”|`[^`]+`|‘[^’]+’(?!\w)|(?<![\w'])'[^']+'(?!\w)")
+_CODE_NAME = re.compile(
+    r"\b[\w-]+\.(?:py|pyi|ts|tsx|js|jsx|mjs|md|json|toml|ya?ml|txt|sh|ps1|go|rs|java|kt|rb"
+    r"|cs|cpp|c|h|css|html|sql|ini|cfg|lock|csv)\b"  # a file name
+    r"|\b\w+(?:/[\w-]+){2,}|\b\w+(?:/[\w-]+)+\.\w+"  # a path (not "and/or")
+    r"|\b[A-Za-z_]\w*\(\)"  # a call: name()
+    r"|\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"  # snake_case
+    r"|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b"  # CONSTANT_CASE
+    r"|\b[a-z]+[A-Z][A-Za-z0-9]*\b"  # camelCase
+)
+
+
+def framing_claims(prose: str, paths: Iterable[str] = ()) -> list[str]:
+    """What makes a FRAMING sentence a claim, one plain entry per kind found; empty when none.
+    `paths` are the snapshot's files: a file's name in the sentence names it."""
+    from shipyap.editorial.voice import subject_claims
+
+    found = []
+    digits = re.findall(r"\d+(?:[.,]\d+)*", prose)
+    spelled = [m.group() for m in _SPELLED_NUMBER.finditer(prose)]
+    if digits or spelled:
+        found.append("number " + ", ".join(dict.fromkeys(digits + spelled)))
+    quoted = [m.group() for m in _QUOTED_STRING.finditer(prose)]
+    if quoted:
+        found.append("quoted " + ", ".join(quoted))
+    names = [m.group() for m in _CODE_NAME.finditer(prose)]
+    folded = prose.casefold()
+    for path in paths:
+        name = path.rsplit("/", 1)[-1]
+        if re.search(rf"(?<![\w.]){re.escape(name.casefold())}(?![\w])", folded):
+            names.append(name)
+    if names:
+        found.append("names " + ", ".join(dict.fromkeys(names)))
+    verbs = subject_claims(prose)
+    if verbs:
+        found.append("states what it does: " + ", ".join(verbs))
+    return found
+
+
 _CLASSIFICATION = {
     Basis.SOURCE: Classification.SOURCE_REFERENCED,
     Basis.AUTHOR: Classification.AUTHOR_STATED,
     Basis.INTERPRETATION: Classification.INTERPRETATION,
     Basis.FRAMING: Classification.FRAMING,
 }
+
+
+def _code_files(brief: Brief, evidence: Iterable["_Evidence"]) -> dict[str, tuple[str, ...]]:
+    """The CODE-role files any segment of the draft cites (located references only)."""
+    paths = {r.path for e in evidence for r in e.refs if r.ref_check in LOCATED}
+    return {
+        s.path: tuple(s.lines) for s in brief.sources if s.path in paths and role(s.path) == "CODE"
+    }
+
+
+def _code_claims(
+    segment: Segment, prose: str, evidence: "_Evidence", code_files: dict[str, tuple[str, ...]]
+) -> list[Finding]:
+    """C1 (`editorial.code_claims`): a runtime outcome from code alone, and a claim about what a
+    value means whose other assignments the sentence does not cite."""
+    located = [r for r in evidence.refs if r.ref_check in LOCATED]
+    findings = []
+    if code_claims.code_only([r.path for r in located], segment.author_refs):
+        outcomes = code_claims.outcome_claims(prose)
+        if outcomes:
+            findings.append(
+                _finding(FindingCode.CODE_OUTCOME_UNSUPPORTED, segment.id, ", ".join(outcomes))
+            )
+    names, gaps = code_claims.meaning_gaps(
+        prose, [(r.path, r.line_start, r.line_end) for r in located], code_files
+    )
+    if gaps:
+        findings.append(
+            _finding(
+                FindingCode.CODE_MEANING_INCOMPLETE,
+                segment.id,
+                f"{', '.join(names)}; {', '.join(gaps)}",
+            )
+        )
+    return findings
 
 
 def _classify(basis: Basis, findings: Iterable[Finding]) -> Classification:

@@ -1,3 +1,5 @@
 * text=auto eol=lf
 # Eval fixtures are hash-pinned snapshots and stored replies: keep their bytes exact.
 evals/** -text
+# Private replay fixtures are copies of a real workspace (hash-pinned bundles): keep bytes exact.
+tests/private/fixtures/** -text

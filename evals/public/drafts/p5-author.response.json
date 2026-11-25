@@ -1,0 +1,76 @@
+{
+  "response_version": "1",
+  "brief_sha256": "1030c4d35ec1943fd12f0a0fd469ff86e509ea7eb574388c1f0e876550d3463d",
+  "outcome": "DRAFT",
+  "no_post_reason": null,
+  "generator": {
+    "kind": "external_model",
+    "label": "SYNTHETIC hand-authored model-shaped fixture via draft-model p5"
+  },
+  "segments": [
+    {
+      "id": "S01",
+      "text": "I wrote a fictional refund desk to explain code-level claims.",
+      "basis": "AUTHOR",
+      "source_refs": [],
+      "author_refs": [
+        "attempted.1"
+      ],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S02",
+      "text": "Its refund button calls send with the refund action and the amount.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 12,
+          "line_end": 14,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": true
+    },
+    {
+      "id": "S03",
+      "text": "Nothing in those lines waits for the refund to be confirmed.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 12,
+          "line_end": 14,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S04",
+      "text": "The notice handler sets noticeSent right after it calls send, without waiting for a result.",
+      "basis": "SOURCE",
+      "source_refs": [
+        {
+          "path": "app/desk.tsx",
+          "line_start": 16,
+          "line_end": 19,
+          "quote": null
+        }
+      ],
+      "author_refs": [],
+      "paragraph_break_before": false
+    },
+    {
+      "id": "S05",
+      "text": "Optimism, but make it a button.",
+      "basis": "FRAMING",
+      "source_refs": [],
+      "author_refs": [],
+      "paragraph_break_before": true
+    }
+  ],
+  "verification_needed": []
+}

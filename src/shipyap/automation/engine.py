@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
-from shipyap.automation import factcheck, repair
+from shipyap.automation import factcheck, plan_route, repair, rotation
 from shipyap.automation.config import AutomationError, Config
 from shipyap.automation.selection import select_sources
 from shipyap.automation.state import State, run_lock
@@ -26,19 +26,22 @@ from shipyap.drafting.errors import (
 )
 from shipyap.drafting.models import Drafter, ModelReply, ModelRequest, Usage
 from shipyap.drafting.policy import charge_estimate, counted_estimate
-from shipyap.drafting.prompt import absolute_phrases, ai_phrases
+from shipyap.drafting.prompt import LENGTH_P5, absolute_phrases, ai_phrases
 from shipyap.drafting.service import checked_input
 from shipyap.drafting.story_draft import (
     OutputState,
     StoryDraftError,
     StoryDraftFailed,
+    drafted_format,
     plan_story_draft,
     recover_story_draft,
     run_story_draft,
+    story_paths,
 )
 from shipyap.drafting.story_service import (
     StoryGenerationError,
     StoryGenerationFailed,
+    discovery_refusals,
     plan_story_generation,
     run_story_generation,
 )
@@ -125,12 +128,20 @@ class RunResult:
     charged_usd: Decimal = Decimal(0)  # list price of the usage the provider reported
     statuses: list[str] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
+    refusals: list[str] = field(default_factory=list)  # "repo: story key: reason code", one each
     draft_paths: list[Path] = field(default_factory=list)
     snapshots: list[Path] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # style flags for the owner; never failures
     repairs: list[str] = field(default_factory=list)  # one line per repaired draft, with its cost
     shelved: list[str] = field(default_factory=list)  # drafts shelved this run, with reasons
     usage_limit: DraftingError | None = None  # the provider's usage-limit refusal, if any
+    # The plan route (C3) only; always empty on the anthropic-api route.
+    needs_model: list[str] = field(default_factory=list)  # request hashes waiting in the outbox
+    plan_blocked: DraftingError | None = None  # a reply that generated nothing (sign-in, limit)
+    plan_cap: bool = False  # plan_calls_per_day stopped a request this run
+    follow_up_pending: bool = False  # a new draft's fact check or repair waits for a reply
+    checked_story: str = ""  # a draft whose fact check and repair finished this run
+    summary: dict | None = None  # the whole plan run so far, every round (for last-run.txt)
 
 
 USAGE_LIMIT_HOLD = timedelta(hours=24)  # when the provider gives no reset time
@@ -162,9 +173,16 @@ def _style_notes(plan, config) -> list[str]:
             "person; add one to pros.toml for drafts in your voice"
         )
     text = (plan.paths.draft / "draft.txt").read_text(encoding="utf-8").removesuffix("\n")
-    if len(text) > STYLE_MAX_CHARS:
+    if plan.post_format is None:
+        if len(text) > STYLE_MAX_CHARS:
+            notes.append(
+                f"draft: {len(text)} characters, over the 1,300 target; shorten it or reject it "
+                "in review"
+            )
+    elif not LENGTH_P5[0] <= len(text) <= LENGTH_P5[1]:
         notes.append(
-            f"draft: {len(text)} characters, over the 1,300 target; shorten it or reject it in review"
+            f"draft: {len(text)} characters, outside the {LENGTH_P5[0]}-{LENGTH_P5[1]} target "
+            "for voice dry-nerdy; shorten it or reject it in review"
         )
     absolute = absolute_phrases(text)
     if absolute:
@@ -176,6 +194,51 @@ def _style_notes(plan, config) -> list[str]:
     if phrases:
         notes.append(f"draft: machine-sounding phrase(s): {', '.join(phrases)}; edit in review")
     return notes
+
+
+def _rotation_arguments(config: Config) -> dict:
+    """What plan_story_draft needs for the voice: nothing new for "plain" (p4, unchanged); for
+    "dry-nerdy" the style file and the last post's repository and format."""
+    if config.voice != "dry-nerdy":
+        return {}
+    last = rotation.load(config.state).last
+    return {
+        "voice": config.voice,
+        "style": config.author_style,
+        "last_repo": last.repo if last else None,
+        "last_format": last.format if last else None,
+    }
+
+
+def _closing_arguments(config: Config) -> dict:
+    """The closing line settings (C2c); nothing when the link is off (voice plain by default)."""
+    if not config.links_repo:
+        return {}
+    return {"link_repo": True, "built_by_me_line": config.built_by_me_line}
+
+
+def _record_rotation(config: Config, plan, result) -> None:
+    """Remember a new dry-nerdy draft's repository and actual format, so the next draft avoids
+    both. A repeat that could not be avoided (one repository with stories, no code line for a
+    punchline) is recorded with a note; the rotation never stops a draft. A story already
+    recorded (a recovered run) is not recorded twice."""
+    if plan.post_format is None:
+        return
+    memory = rotation.load(config.state)
+    if any(e.story_id == plan.story.story_id for e in memory.entries):
+        return
+    response = parse_response((plan.paths.draft / "response.json").read_bytes())
+    entry = rotation.Entry(
+        plan.story.story_id, plan.story.repo_id, drafted_format(response.segments), config.voice
+    )
+    if entry.format != plan.post_format:
+        result.notes.append(
+            f"draft: asked for format {plan.post_format}, the draft is {entry.format}"
+        )
+    reason = memory.refusal(entry)
+    if reason in ("FORMAT_REPEATED", "REPO_REPEATED"):
+        result.notes.append(f"draft: rotation {reason}: no other choice was available this run")
+    rotation.record(config.state, entry, allow_repeat=True)
 
 
 def _fact_check(config, budget, result, plan) -> None:
@@ -193,6 +256,10 @@ def _fact_check(config, budget, result, plan) -> None:
         )
         return
     factcheck.save(config.state, plan.story.story_id, plan.paths.draft, verdicts)
+    _report_fact_check(result, verdicts)
+
+
+def _report_fact_check(result, verdicts) -> None:
     flagged = [v for v in verdicts if v.verdict in factcheck.FLAGGED]
     unsure = [v for v in verdicts if v.verdict == "UNVERIFIABLE"]
     for v in flagged:
@@ -289,6 +356,73 @@ class _Budget:
             raise
         self.result.charged_usd += charge_estimate(request.model, reply.usage)
         return reply
+
+
+class _PlanBudget(_Budget):
+    """The plan route (C3). A plan call costs no API credits, so nothing is reserved against
+    max_cost_usd; every call is still recorded in `spending` (estimated 0), so the weekly draft
+    cap counts plan drafts too. `charged_usd` stays the API list price of the reported usage,
+    for comparison only. After a reply that generated nothing, no call is made this run."""
+
+    def _call(self, method: str, request):
+        if self.result.plan_blocked is not None:
+            raise plan_route.PlanBlocked(self.result.plan_blocked)
+        model = self.adapter()
+        model.kind = self.kind
+        return getattr(model, method)(request)
+
+    def count_input_tokens(self, request):
+        tokens = self._call("count_input_tokens", request)
+        self.count = (request_hash(request), tokens)
+        return tokens
+
+    def generate(self, request):
+        digest, _ = self.count
+        if digest != request_hash(request):
+            raise AutomationError("COUNT_REQUEST_MISMATCH")
+        # One inbox record is one CLI call. A later round replays the same record (a repair
+        # resumed after its next round was answered): it is recorded and priced once.
+        first = (
+            self.state.db.execute(
+                "SELECT 1 FROM spending WHERE request_hash = ?", (digest,)
+            ).fetchone()
+            is None
+        )
+        if first:
+            with self.state.db:
+                self.state.db.execute(
+                    "INSERT INTO spending(kind, request_hash, estimated_usd, "
+                    "attempted_at) VALUES (?, ?, ?, ?)",
+                    (self.kind, digest, "0", datetime.now(UTC).isoformat()),
+                )
+        reply = self._call("generate", request)
+        if first:
+            self.result.charged_usd += charge_estimate(request.model, reply.usage)
+        return reply
+
+
+def _pause(result: "RunResult", exc: plan_route.PlanPaused, where: str) -> None:
+    """Record why the plan route stopped asking; only the first blocking reply is reported."""
+    if isinstance(exc, plan_route.NeedsModel):
+        if exc.request_hash not in result.needs_model:
+            result.needs_model.append(exc.request_hash)
+    elif isinstance(exc, plan_route.PlanCapReached):
+        result.plan_cap = True
+    elif isinstance(exc, plan_route.PlanBlocked) and result.plan_blocked is None:
+        result.plan_blocked = exc.error
+        result.failures.append(f"{where}: {exc.error.code}: {plan_route.pause_message(exc.error)}")
+
+
+@dataclass(frozen=True)
+class _FollowUpPlan:
+    """What the fact check and repair of an existing draft read, rebuilt from its verified files
+    when a plan-route run resumes them (C3)."""
+
+    story: object
+    snapshot_dir: Path
+    snapshot: object
+    brief: object
+    paths: object
 
 
 class _RecordedGeneration:
@@ -411,6 +545,27 @@ def _available(config: Config, set_aside: frozenset = frozenset()):
     ]
 
 
+def _waiting_repositories(config: Config) -> frozenset[str]:
+    """Repositories that have a draft the review page lists as waiting for the owner."""
+    from shipyap.automation import review as review_page  # it imports this module
+
+    ids = set(review_page.waiting(config))
+    if not ids:
+        return frozenset()
+    stories = list_backlog(config.preferences, config.backlog, include_all=True)
+    return frozenset(item.story.repo_id for item in stories if item.story.story_id in ids)
+
+
+def one_per_repository(available, busy: frozenset[str]) -> frozenset[tuple[str, str]]:
+    """At most one draft per repository in a review batch: the available stories of a repository
+    that already has a draft waiting for review are held until that draft is decided."""
+    return frozenset(
+        (item.story.story_id, item.story.latest.manifest_sha256)
+        for item in available
+        if item.story.repo_id in busy
+    )
+
+
 # Bumped when source selection changes, so a re-examined commit gets a fresh snapshot directory
 # while snapshots that existing drafts point at stay where they are.
 SELECTION_VERSION = "2"
@@ -460,6 +615,7 @@ def _examine(config, state, budget, result, repo, revision, snapshot, now, allow
         )
         proposed = discovery.snapshots[0].findings_supplied
         refused = discovery.refused
+        reasons = discovery_refusals(discovery)
     else:
         plan = plan_story_generation(
             config.preferences,
@@ -505,11 +661,13 @@ def _examine(config, state, budget, result, repo, revision, snapshot, now, allow
             # reaches a draft. `pros eval` shows the sentence itself.
             result.notes += [f"{repo}: story {key}: {q}" for q in normalised.review_questions]
         refused = generated.refused  # includes findings dropped for breaking the schema
+        reasons = generated.refusals()
     result.new_candidates += discovery.count(RecordOutcome.NEW)
     state.complete(repo, revision, "NO_FINDINGS" if proposed == 0 else "COMPLETED")
     result.evidence_examined += 1
     if refused:
         result.failures.append(f"{repo}: FINDINGS_REFUSED ({refused})")
+        result.refusals += [f"{repo}: {key}: {reason}" for key, reason in reasons]
     if proposed == 0 or not discovery.count(RecordOutcome.NEW):
         result.statuses.append("EXAMINED_NO_STORY")
 
@@ -523,16 +681,32 @@ def run(
     now: datetime | None = None,
     reexamine: tuple[str, ...] = (),
     retry_now: bool = False,
+    resume: bool = False,
 ) -> RunResult:
     now = now or datetime.now(UTC)
     if (config.workspace_root / STOP_FILE).exists():
         # The owner's off switch: nothing is read, sent or written while it exists.
         return RunResult(statuses=["STOPPED"])
+    if config.provider == "chatgpt-plan":
+        return RunResult(
+            statuses=["NEEDS_ATTENTION"],
+            failures=[
+                "PROVIDER_NOT_IMPLEMENTED: provider chatgpt-plan is reserved and not built yet; "
+                "use anthropic-api or claude-plan in pros.toml. Nothing was read or sent"
+            ],
+        )
+    if config.plan_route and allow_paid:
+        # The plan route never uses API credits; the paid flag would only mislead.
+        raise AutomationError("ALLOW_PAID_NOT_USED_BY_PLAN_ROUTE")
+    if resume and not config.plan_route:
+        raise AutomationError("RESUME_NEEDS_PLAN_ROUTE")
     for directory in (config.state, config.snapshots, config.drafts):
         directory.mkdir(parents=True, exist_ok=True)
     with run_lock(config.state / "run-lock.sqlite"):
         state = State(config.state / "automation.sqlite")
         try:
+            if config.plan_route:
+                return _run_plan(config, transport, state, now, reexamine, retry_now, resume)
             return _run_locked(
                 config,
                 transport,
@@ -598,7 +772,244 @@ def _held(state, now, allow_paid, retry_now) -> RunResult | None:
     )
 
 
-def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()):
+def _run_plan(config, transport, state, now, reexamine, retry_now, resume) -> RunResult:
+    """One round of the plan route (C3): the night window, the sign-in and limit holds, then
+    either the follow-up of a draft that waits for replies or the usual run, with the outbox
+    drafter in place of the API. It never constructs the API adapter or reads a key."""
+    if not plan_route.in_window(config.plan_window, now, config.utc_offset):
+        return RunResult(
+            statuses=["PLAN_WINDOW_WAIT"],
+            notes=[
+                f"plan: outside plan_window {config.plan_window} (your clock, UTC"
+                f"{config.utc_offset}); nothing was read or sent"
+            ],
+        )
+    held = _plan_held(config, state, now, retry_now)
+    if held is not None:
+        return held
+    if resume and not plan_route.answered_all(config.workspace_root):
+        raise AutomationError("PLAN_REPLIES_MISSING")
+    drafter = plan_route.PlanDrafter(
+        config.workspace_root,
+        now,
+        config.utc_offset,
+        config.plan_calls_per_day,
+        config.plan_timeout_seconds,
+    )
+    drafter.start()
+    pending = plan_route.load_follow_up(config.state)
+    if pending is not None:
+        result = _run_follow_up(config, state, lambda: drafter, pending)
+    else:
+        result = _run_unheld(config, transport, state, True, lambda: drafter, now, reexamine, True)
+    blocked = result.plan_blocked
+    if blocked is not None and blocked.code == DraftingErrorCode.PLAN_USAGE_LIMIT:
+        until = blocked.resets_at or now + plan_route.PLAN_LIMIT_HOLD
+        state.hold(blocked.code, _utc(max(until, now)), _utc(now))
+        result.statuses.insert(0, "USAGE_LIMIT_REACHED")
+    elif blocked is not None and blocked.code in (
+        DraftingErrorCode.PLAN_SIGNIN_REQUIRED,
+        DraftingErrorCode.PLAN_NOT_SUBSCRIPTION,
+    ):
+        state.hold(blocked.code, _utc(now + plan_route.SIGN_IN_HOLD), _utc(now))
+        result.statuses.insert(0, "SIGN_IN_REQUIRED")
+    elif retry_now:
+        state.release(plan=True)
+    _summarise(config, result, now, resume, drafter.needed)
+    return result
+
+
+_SUMMED = ("failures", "refusals", "repairs", "shelved", "notes")
+
+
+def _summarise(config, result: RunResult, now: datetime, resume: bool, asked: list[str]) -> None:
+    """The plan run as one run: a `pros run` and every `--resume` round after it, until a round
+    needs no more replies. Kept in automation/plan-run.json between rounds, so last-run.txt
+    reports every draft, call, list-price amount and note of the run, not one round's."""
+    series = plan_route.load_series(config.state) if resume else None
+    series = series or {
+        "series_version": "1",
+        "started_at": _utc(now),
+        "rounds": 0,
+        "asked": [],
+        "drafts_created": 0,
+        "charged_usd": "0",
+        "draft_story": "",
+        **{key: [] for key in _SUMMED},
+    }
+    series["rounds"] += 1
+    series["asked"] = sorted(set(series["asked"]) | set(asked))
+    series["drafts_created"] += result.drafts_created
+    series["charged_usd"] = str(Decimal(series["charged_usd"]) + result.charged_usd)
+    series["draft_story"] = result.draft_story or series["draft_story"]
+    for key in _SUMMED:
+        series[key] += [line for line in getattr(result, key) if line not in series[key]]
+    series["statuses"] = list(result.statuses)
+    series["calls"] = plan_route.calls_made(config.workspace_root, series["asked"])
+    if result.needs_model:
+        plan_route.save_series(config.state, series)
+    else:
+        plan_route.clear_series(config.state)
+    result.summary = series
+
+
+def _plan_held(config, state, now, retry_now) -> RunResult | None:
+    """The plan route's holds (C3). A sign-in hold ends as soon as the wrapper has seen a good
+    subscription sign-in after it began; a limit hold at its reset. Nothing is told again."""
+    row = state.holding(_utc(now), plan=True)
+    if row is None or retry_now:
+        return None
+    if row["code"] != DraftingErrorCode.PLAN_USAGE_LIMIT:
+        seen = plan_route.signed_in_since(config.workspace_root)
+        if seen is not None and _utc(seen) > row["since"]:
+            state.release(plan=True)
+            return None
+        return RunResult(
+            statuses=["SIGN_IN_WAIT"],
+            notes=[
+                f"plan: Claude Code has not been signed in with your Claude subscription since "
+                f"{row['since'][:16].replace('T', ' ')} UTC ({row['code']}); this run read and "
+                "sent nothing. Run `claude` once and sign in; the next run continues by itself"
+            ],
+        )
+    until = row["until"].replace("T", " ").removesuffix("Z")[:16]
+    return RunResult(
+        statuses=["USAGE_LIMIT_WAIT"],
+        notes=[
+            f"plan: the Claude plan usage limit was reached on {row['since'][:10]}; this run read "
+            f"and sent nothing, and runs wait until {until} UTC. To try earlier: pros run "
+            "--retry-now"
+        ],
+    )
+
+
+def _run_follow_up(config, state, factory, pending) -> RunResult:
+    """The plan route resumes a draft's fact check and repair (C3) from its verified files,
+    and does nothing else this round: no repository is read and no new draft is planned."""
+    sid, snapshot_name = pending
+    result = RunResult()
+    budget = _PlanBudget(config, state, factory, result)
+    paths = story_paths(config.drafts, sid)
+    try:
+        snapshots = _usable_snapshots(config, state, result)
+        snapshot_dir = config.snapshots / snapshot_name
+        if snapshot_dir.resolve() not in {s.resolve() for s in snapshots}:
+            raise AutomationError("FOLLOW_UP_SNAPSHOT_MISSING")
+        prepared = prepare_build(snapshot_dir, paths.brief)
+        with StoryBacklog.open(config.backlog, create=False) as backlog:
+            story = next((s for s in backlog.stories() if s.story_id == sid), None)
+        if story is None:
+            raise AutomationError("FOLLOW_UP_STORY_MISSING")
+        plan = _FollowUpPlan(story, snapshot_dir, prepared.snapshot, prepared.brief, paths)
+        _follow_up(config, budget, result, plan, snapshots, True, resumed=True)
+    except plan_route.PlanPaused as exc:
+        _pause(result, exc, "draft")
+        _hold_back_verdicts(result)
+        result.follow_up_pending = True
+    except _ERRORS as exc:
+        result.failures.append(f"draft: {_code(exc, drafted=True)}")
+        plan_route.clear_follow_up(config.state)
+    else:
+        plan_route.clear_follow_up(config.state)
+        result.checked_story = sid
+        result.draft_paths.append(paths.draft)
+        result.statuses.append("DRAFT_CHECKED")
+    return _finish(result)
+
+
+_VERDICT_LINE = ("fact check: S", "fact check: not verifiable", "fact check: no sentence flagged")
+
+
+def _hold_back_verdicts(result: RunResult) -> None:
+    """Plan route: the fact check's verdict lines wait for the round that finishes the draft's
+    repair (they are re-read from the saved check there), so a flag the repair clears is never
+    reported. Other fact-check failures stay: nothing else would report them."""
+    result.failures = [f for f in result.failures if not f.startswith(_VERDICT_LINE)]
+    result.notes = [n for n in result.notes if not n.startswith(_VERDICT_LINE)]
+
+
+def _finish(result: RunResult) -> RunResult:
+    """The run's closing statuses. The plan lines never appear on the anthropic-api route."""
+    if result.plan_cap:
+        result.notes.append(
+            "plan: plan_calls_per_day reached for today (your clock); the rest waits for "
+            "tomorrow, or raise plan_calls_per_day in pros.toml"
+        )
+        result.statuses.append("PLAN_CAP_REACHED")
+    if result.needs_model:
+        result.statuses.insert(0, "NEEDS_MODEL")
+    if result.failures:
+        result.statuses.append("NEEDS_ATTENTION")
+    if not result.statuses:
+        result.statuses.append("NEW_STORIES_RECORDED" if result.new_candidates else "NO_CHANGES")
+    return result
+
+
+def _usable_snapshots(config, state, result) -> list[Path]:
+    # Existing snapshots can be supplied by choosing their parent as config.snapshots.
+    snapshots = list(
+        dict.fromkeys(
+            [
+                *state.snapshots(),
+                *sorted(
+                    p
+                    for p in config.snapshots.iterdir()
+                    if p.is_dir() and (p / "manifest.json").is_file()
+                ),
+            ]
+        )
+    )
+    usable = []
+    for snapshot in snapshots:
+        try:
+            if snapshot.resolve().parent != config.snapshots:
+                raise AutomationError("SNAPSHOT_OUTSIDE_CONFIGURED_DIRECTORY")
+            if load_verified_snapshot(snapshot).workspace_id != config.workspace_id:
+                raise AutomationError("SNAPSHOT_WORKSPACE_MISMATCH")
+            usable.append(snapshot)
+        except _ERRORS as exc:
+            result.failures.append(f"snapshot {snapshot.name}: {_code(exc)}")
+    return usable
+
+
+def _follow_up(config, budget, result, plan, snapshots, may_call, resumed=False) -> None:
+    """A new draft's fact check, then its auto-repair (each runs once per draft). `resumed`
+    (plan route only): the check ran in an earlier round, so its saved verdicts are reported
+    here, where the repair that may clear them also runs."""
+    if may_call:
+        previous_check = factcheck.load(config.state, plan.story.story_id)
+        check_path = config.state / factcheck.DIRECTORY / f"{plan.story.story_id}.json"
+        if previous_check is None and not check_path.exists():
+            _fact_check(config, budget, result, plan)
+        else:
+            from shipyap.review.required import completed_fact_check
+
+            response = parse_response((plan.paths.draft / "response.json").read_bytes())
+            if (
+                not isinstance(previous_check, dict)
+                or previous_check.get("draft") != plan.paths.draft.name
+                or not completed_fact_check(previous_check, response)
+            ):
+                result.failures.append(
+                    "fact check: existing record is invalid or belongs to another "
+                    "draft; it was preserved and approval is blocked"
+                )
+            elif resumed:
+                _report_fact_check(
+                    result,
+                    [
+                        factcheck.Verdict(
+                            v["segment_id"], v["verdict"], v["reason"], tuple(v.get("refs", ()))
+                        )
+                        for v in previous_check["verdicts"]
+                    ],
+                )
+    budget.fact_check_hold = Decimal(0)
+    if may_call:
+        _repair(config, budget, result, plan, snapshots)
+
+
+def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=(), plan=False):
     drafts_this_week = _paid_drafts_this_week(state, now)
     if config.max_new_drafts and drafts_this_week >= config.weekly_draft_cap:
         # Checked before anything is read or sent: discovery is paid too, and a run that cannot
@@ -638,9 +1049,9 @@ def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()
     result = RunResult()
     initial_ids = {item.story.story_id for item in _available(config, set_aside)}
     result.existing_available = len(initial_ids)
-    budget = _Budget(config, state, factory, result)
+    budget = (_PlanBudget if plan else _Budget)(config, state, factory, result)
     for repo in repos:
-        if result.usage_limit is not None:
+        if result.usage_limit is not None or result.plan_blocked is not None:
             break  # every further request would be refused the same way
         result.repositories_inspected += 1
         try:
@@ -702,35 +1113,31 @@ def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()
                 now,
                 allow_paid,
             )
+        except plan_route.PlanPaused as exc:  # the plan route only
+            _pause(result, exc, repo.repo_id)
         except _ERRORS as exc:
             result.failures.append(f"{repo.repo_id}: {_code(exc)}")
-    # Existing snapshots can be supplied by choosing their parent as config.snapshots.
-    snapshots = list(
-        dict.fromkeys(
-            [
-                *state.snapshots(),
-                *sorted(
-                    p
-                    for p in config.snapshots.iterdir()
-                    if p.is_dir() and (p / "manifest.json").is_file()
-                ),
-            ]
-        )
-    )
-    usable = []
-    for snapshot in snapshots:
-        try:
-            if snapshot.resolve().parent != config.snapshots:
-                raise AutomationError("SNAPSHOT_OUTSIDE_CONFIGURED_DIRECTORY")
-            if load_verified_snapshot(snapshot).workspace_id != config.workspace_id:
-                raise AutomationError("SNAPSHOT_WORKSPACE_MISMATCH")
-            usable.append(snapshot)
-        except _ERRORS as exc:
-            result.failures.append(f"snapshot {snapshot.name}: {_code(exc)}")
-    snapshots = usable
+    snapshots = _usable_snapshots(config, state, result)
     result.snapshots = snapshots
     waiting = _available(config, set_aside)
+    held = frozenset()
     if config.max_new_drafts and waiting and result.usage_limit is None:
+        held = one_per_repository(waiting, _waiting_repositories(config))
+        if held:
+            repos = sorted({i.story.repo_id for i in waiting if i.story.story_id in dict(held)})
+            result.notes.append(
+                f"draft: {', '.join(repos)} already has a draft waiting for review; its other "
+                "stories wait until you approve or reject it (one draft per repository)"
+            )
+        waiting = [
+            i for i in waiting if (i.story.story_id, i.story.latest.manifest_sha256) not in held
+        ]
+    if (
+        config.max_new_drafts
+        and waiting
+        and result.usage_limit is None
+        and result.plan_blocked is None
+    ):
         try:
             plan = plan_story_draft(
                 config.preferences,
@@ -740,7 +1147,9 @@ def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()
                 model=config.model,
                 budget=config.max_cost_usd,
                 authors=config.authors,
-                exclude=set_aside,
+                exclude=set_aside | held,
+                **_rotation_arguments(config),
+                **_closing_arguments(config),
             )
             if plan is not None:
                 if plan.state in (OutputState.FRESH, OutputState.BRIEF_READY):
@@ -761,31 +1170,18 @@ def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()
                 if result.drafts_created:
                     result.draft_story = plan.story.story_id
                     result.notes.extend(_style_notes(plan, config))
-                    if allow_paid:
-                        previous_check = factcheck.load(config.state, plan.story.story_id)
-                        check_path = (
-                            config.state / factcheck.DIRECTORY / f"{plan.story.story_id}.json"
+                    _record_rotation(config, plan, result)
+                    try:
+                        _follow_up(config, budget, result, plan, snapshots, allow_paid)
+                    except plan_route.PlanPaused as exc:  # the plan route only
+                        # The draft exists; its fact check and repair finish in later rounds.
+                        _pause(result, exc, "draft")
+                        _hold_back_verdicts(result)
+                        budget.fact_check_hold = Decimal(0)
+                        plan_route.save_follow_up(
+                            config.state, plan.story.story_id, plan.snapshot_dir.name
                         )
-                        if previous_check is None and not check_path.exists():
-                            _fact_check(config, budget, result, plan)
-                        else:
-                            from shipyap.review.required import completed_fact_check
-
-                            response = parse_response(
-                                (plan.paths.draft / "response.json").read_bytes()
-                            )
-                            if (
-                                not isinstance(previous_check, dict)
-                                or previous_check.get("draft") != plan.paths.draft.name
-                                or not completed_fact_check(previous_check, response)
-                            ):
-                                result.failures.append(
-                                    "fact check: existing record is invalid or belongs to another "
-                                    "draft; it was preserved and approval is blocked"
-                                )
-                    budget.fact_check_hold = Decimal(0)
-                    if allow_paid:
-                        _repair(config, budget, result, plan, snapshots)
+                        result.follow_up_pending = True
                     result.statuses.append(
                         "BACKLOG_DRAFTED"
                         if plan.story.story_id in initial_ids
@@ -793,10 +1189,8 @@ def _run_unheld(config, transport, state, allow_paid, factory, now, reexamine=()
                     )
                 if drafted.draft_status != DraftStatus.READY_FOR_REVIEW:
                     result.statuses.append(drafted.draft_status.value)
+        except plan_route.PlanPaused as exc:  # the plan route only
+            _pause(result, exc, "draft")
         except _ERRORS as exc:
             result.failures.append(f"draft: {_code(exc)}")
-    if result.failures:
-        result.statuses.append("NEEDS_ATTENTION")
-    if not result.statuses:
-        result.statuses.append("NEW_STORIES_RECORDED" if result.new_candidates else "NO_CHANGES")
-    return result
+    return _finish(result)

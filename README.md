@@ -16,10 +16,24 @@ posted without your approval.
 [Try the demo](#try-the-demo) · [Use your own repo](#use-your-own-repo) · [How it works](#how-it-works)
 
 - **[Try it free](#try-the-demo)**: offline demo, no keys, no account.
-- **[Use it on your repos](#use-your-own-repo)**: needs an Anthropic API key; measured about
-  $0.15 per draft, with weekly caps ([costs and limits](#costs-and-limits)).
+- **[Use it on your repos](#use-your-own-repo)**: with an Anthropic API key (measured about
+  $0.15 per draft, with weekly caps; [costs and limits](#costs-and-limits)), or with
+  [your Claude plan and no API credits](#use-your-claude-plan-no-api-credits).
 
 The demo is fictional, offline after installation, and needs no accounts or keys.
+
+## What's new in 0.2
+
+[Watch the demo video](https://github.com/devdiv07/shipyap/releases/download/v0.2.0/shipyap-demo.mp4)
+· [Release notes](docs/releases/v0.2.0.md)
+
+- **Catches code overclaims.** A sentence that says more than the cited code does (a runtime
+  outcome the code doesn't show, or a value's meaning when other lines change it) has to be fixed
+  before you can approve it.
+- **Writes in your voice.** `voice = "dry-nerdy"` gives short posts shaped by your own style file,
+  ending with your repo link. A joke line that slips in a fact is blocked.
+- **Can use your Claude plan instead of API credits.** Set `provider = "claude-plan"`, and model
+  calls go through Claude Code on your Pro or Max plan. [Setup](#use-your-claude-plan-no-api-credits).
 
 ## Try the demo
 
@@ -65,7 +79,9 @@ and posting slots. Without an author statement the draft uses third person.
 The UTC offset defaults to your machine's current offset; `--utc-offset +05:30` overrides it.
 Existing workspaces and files are preserved; for another repo use `shipyap repo set`.
 
-Drafts and fact checks use **Anthropic's Claude API**. To enable paid generation on Windows:
+Drafts and fact checks use **Anthropic's Claude API** by default. If you have a Claude Pro or Max
+plan, you can skip the key and credits:
+[use your Claude plan](#use-your-claude-plan-no-api-credits). To enable paid generation on the API on Windows:
 
 1. [Create an API key in the Claude Console](https://platform.claude.com/docs/en/get-api-key).
 2. [Add API usage credits](https://support.claude.com/en/articles/8977456-how-do-i-pay-for-my-claude-api-usage)
@@ -125,6 +141,72 @@ it makes no call and says to raise `max_cost_usd` in `pros.toml`.
 Reservations are estimates, not provider billing guarantees. Set a provider-side spending limit too.
 If drafting fails with a usage-limit message, raise the monthly limit in the Anthropic Console.
 
+## Use your Claude plan (no API credits)
+
+If you pay for a Claude subscription (Pro or Max), Shipyap can send its model calls through
+[Claude Code](https://docs.claude.com/en/docs/claude-code) on your computer instead of the
+Anthropic API. These calls use your plan's normal usage, not API credits, and you need no API key.
+The prompts, checks, fact check, repair and review page are exactly the same as on the API.
+Tested on Windows.
+
+You need: a Claude Pro or Max plan, Claude Code installed, and a workspace from
+[Use your own repo](#use-your-own-repo) (skip the API key steps there).
+
+1. Install Claude Code, open PowerShell and run `claude` once. Sign in with your Claude account
+   (not an API key), then type `/exit`. Do not set `ANTHROPIC_API_KEY` for Claude Code.
+2. Check the setup. This makes **one** tiny call through your plan and prints what it found:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\model-plan.ps1 -Doctor -Config 'C:\work\my-posts\pros.toml'
+   ```
+
+   It must end with `Doctor: PASS`. It refuses if Claude Code uses an API key or an
+   `apiKeyHelper`, if the flags are not accepted, or if anything besides Shipyap's prompt
+   reached the model.
+3. Add these lines to `pros.toml` (above any `[author]` table):
+
+   ```toml
+   provider = "claude-plan"
+   plan_calls_per_day = 8        # model calls per day on your clock; a draft takes about 3 to 5
+   # plan_window = "01:00-06:00" # optional: only call the model at these hours (your clock)
+   ```
+
+4. Run it with the wrapper, which repeats until the draft is finished:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-and-notify.ps1 -Config 'C:\work\my-posts\pros.toml'
+   ```
+
+5. Optional, the timer (every 3 hours while you are logged in to Windows). Run it **without**
+   `-EnablePaid`; the plan route refuses that flag:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Config 'C:\work\my-posts\pros.toml'
+   ```
+
+   The task runs as you, so it uses your own Claude Code sign-in.
+
+To check what Shipyap reads from your config, run `uv run --locked --no-dev shipyap settings --config 'C:\work\my-posts\pros.toml'`.
+
+How it works: `pros run` writes each model request to `model-outbox\` and stops with
+`NEEDS_MODEL` (exit code 3). `scripts\model-plan.ps1` runs `claude -p` once per request in a fresh,
+empty folder with every tool, plugin, hook, MCP server, skill, `CLAUDE.md` and user setting turned
+off, and saves the raw answer in `model-inbox\`. `pros run --resume` then continues exactly as
+with an API reply. A fact check or repair can take more rounds; the wrapper loops until done.
+Every answer stays in `model-inbox\`, so `pros eval` can replay it.
+
+If something goes wrong:
+
+- **Not signed in or sign-in expired:** one notification, "Sign in to Claude Code (run `claude`
+  once)". Nothing is sent until you sign in; the next run continues by itself.
+- **Plan usage limit reached:** one notification. Nothing is sent until the limit resets (or run
+  `pros run --config ... --retry-now`).
+- **No answer in time** (`plan_timeout_seconds`, default 300): the request is asked again on the
+  next run. Every call counts toward `plan_calls_per_day`.
+- **Unusable answer:** it is kept and refused by the same checks as a bad API reply.
+
+`provider = "chatgpt-plan"` is reserved for a later version and is refused for now.
+
 ## Scope and limitations
 
 Windows is the first target; Linux is tested in CI; macOS is untested. The timer is Windows-only.
@@ -135,7 +217,8 @@ limited; the selected snapshot may not include everything that matters. The fact
 guarantee accuracy, and a human still needs to read every claim and source. The optional recurring
 timer uses Windows Task Scheduler and runs only while the user is logged in.
 
-v0.1 drafts are plain; check each claim and expect to add your own voice.
+The default voice is plain. `voice = "dry-nerdy"` with your style file gets closer to how you
+write, but check every claim before approving.
 
 ## Safety and the timer
 
@@ -152,7 +235,7 @@ uv sync --locked --no-dev
 
 If PowerShell blocks scripts, run `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Config 'C:\work\my-posts\pros.toml' -EnablePaid` instead.
 
-Omit `-EnablePaid` for free runs. When a draft is ready, the notification says how many drafts
+Omit `-EnablePaid` for free runs, and always omit it with `provider = "claude-plan"`. When a draft is ready, the notification says how many drafts
 are waiting and has a **Review** button that opens that draft on the review page. If the page is
 already open, the button reuses it. Setup registers a `shipyap://` link handler for your Windows
 user only. Remove the timer and the handler with `.\scripts\setup.ps1 -Remove`

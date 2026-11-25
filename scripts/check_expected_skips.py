@@ -55,6 +55,7 @@ MAX_REPORT_BYTES = 16 * 1024 * 1024
 MAX_LISTED = 10  # entries listed per bulk problem; the count is always complete
 
 _EVIDENCE_CHECK = "tests.test_evidence_check"
+_PLAN_WRAPPER = "tests.test_plan_wrapper"
 _EVERYWHERE = {"win32": PASSED, "linux": PASSED}
 _WINDOWS_ONLY = {"win32": PASSED, "linux": SKIPPED}
 
@@ -67,6 +68,30 @@ SECURITY_TESTS: dict[Identity, dict[str, str]] = {
     (_EVIDENCE_CHECK, "test_symlink_inside_root_is_allowed"): _EVERYWHERE,
     (_EVIDENCE_CHECK, "test_windows_junction_escape"): _WINDOWS_ONLY,
     (_EVIDENCE_CHECK, "test_windows_trailing_dot_alias_cannot_reach_file"): _WINDOWS_ONLY,
+    # C3: the plan route's CLI wrapper is Windows PowerShell; its isolation is tested there only.
+    **{
+        (_PLAN_WRAPPER, name): _WINDOWS_ONLY
+        for name in (
+            "test_the_wrapper_answers_every_round_in_isolation[structured]",
+            "test_the_wrapper_answers_every_round_in_isolation[result]",
+            "test_without_a_subscription_sign_in_nothing_is_sent[logged_out-PLAN_SIGNIN_REQUIRED]",
+            "test_without_a_subscription_sign_in_nothing_is_sent[api_key-PLAN_NOT_SUBSCRIPTION]",
+            "test_auth_only_records_the_sign_in_and_calls_nothing",
+            "test_the_launcher_is_resolved_from_the_npm_shim[claude.cmd]",
+            "test_the_launcher_is_resolved_from_the_npm_shim[claude.ps1]",
+            "test_a_javascript_shim_runs_node_with_cli_js",
+            "test_a_missing_cli_is_a_clear_error",
+            "test_model_plan_finds_the_workspace_in_both_quote_styles[single]",
+            "test_model_plan_finds_the_workspace_in_both_quote_styles[double]",
+            "test_run_and_notify_loops_the_plan_route_in_both_quote_styles[single]",
+            "test_run_and_notify_loops_the_plan_route_in_both_quote_styles[double]",
+            "test_run_and_notify_runs_the_api_route_once_in_both_quote_styles[single]",
+            "test_run_and_notify_runs_the_api_route_once_in_both_quote_styles[double]",
+            "test_an_unreadable_config_still_tells_and_fails",
+            "test_a_crashed_round_still_tells_and_fails",
+            "test_the_plan_route_refuses_enable_paid",
+        )
+    },
 }
 WINDOWS_ONLY_TESTS = frozenset(i for i, o in SECURITY_TESTS.items() if o == _WINDOWS_ONLY)
 EXPECTED_SKIPS: dict[str, frozenset[Identity]] = {
